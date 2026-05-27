@@ -44,17 +44,18 @@ program
   .option('--no-gate-review', 'Disable review gate')
   .action(async (opts: Record<string, string | boolean>) => {
     const workspaceRoot = path.resolve(opts['workspace'] as string);
-    const nonInteractive = Boolean(opts['non-interactive']);
+    // Commander camelCases kebab options: --non-interactive → nonInteractive
+    const nonInteractive = Boolean(opts['nonInteractive']);
 
     console.log(`\nArbiter init — scanning ${workspaceRoot}...\n`);
 
     const profile = await scanProject(workspaceRoot);
 
     // Apply CLI flag overrides to detected profile before interview/defaults
-    if (opts['frontend'])      profile.stackFrontend = opts['frontend'] as string;
-    if (opts['backend'])       profile.stackBackend  = opts['backend']  as string;
-    if (opts['database'])      profile.stackDatabase = opts['database'] as string;
-    if (opts['test-framework']) profile.testFramework = opts['test-framework'] as string;
+    if (opts['frontend'])     profile.stackFrontend = opts['frontend']     as string;
+    if (opts['backend'])      profile.stackBackend  = opts['backend']      as string;
+    if (opts['database'])     profile.stackDatabase = opts['database']     as string;
+    if (opts['testFramework']) profile.testFramework = opts['testFramework'] as string;
 
     console.log(formatProfile(profile));
 
@@ -71,9 +72,10 @@ program
       const a = opts['audience'] as string;
       answers.audience = a === 'regulated' ? 'regulated' : a === 'internal' ? 'internal' : 'public';
     }
-    if (opts['gate-design']  === false) answers.gates.design  = false;
-    if (opts['gate-plan']    === false) answers.gates.plan    = false;
-    if (opts['gate-review']  === false) answers.gates.review  = false;
+    // --no-gate-* flags: Commander stores them as gateDesign/gatePlan/gateReview booleans
+    if (opts['gateDesign']  === false) answers.gates.design  = false;
+    if (opts['gatePlan']    === false) answers.gates.plan    = false;
+    if (opts['gateReview']  === false) answers.gates.review  = false;
 
     const configResult = await generateConfig(workspaceRoot, answers);
     if (!configResult.ok) {
@@ -108,9 +110,9 @@ program
     const conductor = new Conductor({
       resume: Boolean(opts['resume']),
       shadow: Boolean(opts['shadow']),
-      dryRun: Boolean(opts['dry-run']),
+      dryRun: Boolean(opts['dryRun']),
       workspaceRoot,
-      maxParallel: parseInt(String(opts['max-parallel']), 10),
+      maxParallel: parseInt(String(opts['maxParallel']), 10),
     });
     const result = await conductor.conduct(taskId);
     if (!result.ok) {
