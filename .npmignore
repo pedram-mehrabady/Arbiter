@@ -1,0 +1,20 @@
+# Source and dev files — not needed in the published package
+src/
+tests/
+*.test.ts
+*.spec.ts
+
+# Config and tooling
+tsconfig.json
+vitest.config.ts
+.eslintrc*
+.prettierrc*
+
+# Runtime artifacts that don't belong in the package
+.arbiter/
+*.tmp.*
+
+# Editor
+.vscode/
+.idea/
+*.swp
