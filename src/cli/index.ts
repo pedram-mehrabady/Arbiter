@@ -8,6 +8,7 @@ import { BuildReceiptStore } from '../receipts/BuildReceipt';
 import { RateLimiter } from '../queue/RateLimiter';
 import { TaskQueue } from '../queue/TaskQueue';
 import { StateStore } from '../state/StateStore';
+import { TaskInitializer } from '../task/TaskInitializer';
 
 const program = new Command();
 
@@ -174,6 +175,78 @@ program
     const headroom = await limiter.getHeadroom();
     console.log(`Today's spend: $${total.toFixed(4)}`);
     console.log(`Budget headroom: ${Math.round(headroom * 100)}%`);
+  });
+
+// ─── arbiter task ─────────────────────────────────────────────────────────────
+
+const taskCmd = program.command('task').description('Task lifecycle management');
+
+taskCmd
+  .command('init <task-id>')
+  .description('Initialise a new task from a spec file and write initial pipeline state')
+  .requiredOption('--spec <file>', 'Path to the feature spec file (markdown)')
+  .option('--skip <agents>', 'Comma-separated agent roles to skip (e.g. frontend,tech-writer)')
+  .option('--workspace <path>', 'Workspace root', process.cwd())
+  .action(async (taskId: string, opts: Record<string, string>) => {
+    const root = path.resolve(opts['workspace']);
+    const initializer = new TaskInitializer(root);
+
+    const skipAgents = opts['skip']
+      ? opts['skip'].split(',').map(s => s.trim())
+      : [];
+
+    const result = await initializer.init({
+      taskId,
+      specFile: path.resolve(opts['spec']),
+      workspaceRoot: root,
+      skipAgents: skipAgents as never[],
+    });
+
+    if (!result.ok) {
+      console.error(`Error: ${result.error}`);
+      process.exit(1);
+    }
+
+    const { taskDir, stateFile, subTaskCount, pipeline } = result.value;
+
+    console.log(`\nTask ${taskId} initialised`);
+    console.log(`  Spec copied to: ${taskDir}/task.md`);
+    console.log(`  State file:     ${stateFile}`);
+    console.log(`\nPipeline (${subTaskCount} sub-tasks):`);
+    console.log(TaskInitializer.describePipeline(skipAgents as never[]));
+    console.log(`\nRun with:  arbiter conduct ${taskId} --workspace ${root}`);
+    console.log(`Resume:    arbiter conduct ${taskId} --resume --workspace ${root}`);
+
+    void pipeline; // used in describePipeline above
+  });
+
+taskCmd
+  .command('reset <task-id>')
+  .description('Reset all sub-tasks to pending (keeps state.json, clears progress)')
+  .option('--workspace <path>', 'Workspace root', process.cwd())
+  .action(async (taskId: string, opts: Record<string, string>) => {
+    const root = path.resolve(opts['workspace']);
+    const store = new StateStore(root);
+    const stateResult = await store.read();
+    if (!stateResult.ok) { console.error(stateResult.error); process.exit(1); }
+
+    const state = stateResult.value;
+    if (state.task_id !== taskId) {
+      console.error(`State is for task "${state.task_id}", not "${taskId}"`);
+      process.exit(1);
+    }
+
+    for (const subTaskId of Object.keys(state.sub_tasks)) {
+      await store.updateSubTask(subTaskId, {
+        status: 'pending',
+        output_hash: undefined,
+        receipt_id: undefined,
+        strike: undefined,
+        last_failure_class: undefined,
+        completed_at: undefined,
+      });
+    }
+    console.log(`Task ${taskId}: all ${Object.keys(state.sub_tasks).length} sub-tasks reset to pending.`);
   });
 
 // ─── arbiter queue ────────────────────────────────────────────────────────────

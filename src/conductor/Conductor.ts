@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import {
   TaskState,
   SubTaskEntry,
@@ -8,6 +9,7 @@ import {
   ServiceResult,
   AgentRole,
   FactoryConfig,
+  BuildReceipt,
 } from '../types/index';
 import { StateStore } from '../state/StateStore';
 import { DecisionLog } from '../decisions/DecisionLog';
@@ -75,13 +77,31 @@ export class Conductor {
       return stateResult;
     }
 
-    const state = stateResult.value;
+    let state = stateResult.value;
     if (state.task_id !== taskId) {
       return {
         ok: false,
         error: `State file contains task ${state.task_id}, expected ${taskId}`,
         code: 'TASK_MISMATCH',
       };
+    }
+
+    if (this.options.resume) {
+      const recoveryResult = await this.recoverState(taskId, state);
+      if (!recoveryResult.ok) return recoveryResult;
+      state = recoveryResult.value;
+    } else {
+      // Fresh start — reject if any sub-task is already completed (use --resume)
+      const hasProgress = Object.values(state.sub_tasks).some(
+        e => e.status === 'completed' || e.status === 'in_progress',
+      );
+      if (hasProgress) {
+        return {
+          ok: false,
+          error: `Task ${taskId} has existing progress. Use --resume to continue, or delete .arbiter/state.json to restart.`,
+          code: 'USE_RESUME',
+        };
+      }
     }
 
     await this.decisionLog.append({
@@ -91,6 +111,87 @@ export class Conductor {
     });
 
     return this.runLoop(state);
+  }
+
+  // P0-1: On resume, reset interrupted sub-tasks and verify completed ones.
+  private async recoverState(taskId: string, state: TaskState): Promise<ServiceResult<TaskState>> {
+    const allReceipts = await this.receipts.readAll();
+    const receiptMap = new Map<string, BuildReceipt>(
+      allReceipts.ok ? allReceipts.value.map(r => [r.receipt_id, r]) : [],
+    );
+
+    for (const [subTaskId, entry] of Object.entries(state.sub_tasks)) {
+      if (entry.status === 'in_progress') {
+        // Interrupted mid-invocation — reset to pending, consume no strike
+        const update = await this.stateStore.updateSubTask(subTaskId, { status: 'pending' });
+        if (!update.ok) return update;
+        await this.decisionLog.append({
+          task_id: taskId,
+          sub_task: subTaskId,
+          event: 'resume_reset_in_progress',
+          detail: 'Was in_progress at resume — reset to pending (SIGKILL recovery)',
+        });
+        console.log(`  ↺ ${subTaskId} — interrupted, reset to pending`);
+
+      } else if (entry.status === 'completed') {
+        const valid = await this.verifyCompletedSubTask(entry, receiptMap);
+
+        if (!valid) {
+          // Output files changed or receipt invalid — must re-run
+          const update = await this.stateStore.updateSubTask(subTaskId, {
+            status: 'pending',
+            output_hash: undefined,
+            receipt_id: undefined,
+          });
+          if (!update.ok) return update;
+          await this.decisionLog.append({
+            task_id: taskId,
+            sub_task: subTaskId,
+            event: 'resume_hash_mismatch',
+            detail: 'Output hash mismatch or receipt invalid — reset to pending for re-run',
+          });
+          console.log(`  ⚠ ${subTaskId} — output changed since completion, will re-run`);
+        } else {
+          await this.decisionLog.append({
+            task_id: taskId,
+            sub_task: subTaskId,
+            event: 'resume_skip_verified',
+            detail: `Output verified (receipt: ${entry.receipt_id ?? 'none'}) — skipping`,
+          });
+          console.log(`  ✓ ${subTaskId} — verified, skipping`);
+        }
+      }
+    }
+
+    return this.stateStore.read();
+  }
+
+  private async verifyCompletedSubTask(
+    entry: SubTaskEntry,
+    receiptMap: Map<string, BuildReceipt>,
+  ): Promise<boolean> {
+    if (!entry.receipt_id) return false;
+
+    const receipt = receiptMap.get(entry.receipt_id);
+    if (!receipt) return false;
+
+    // Verify Ed25519 signature on the receipt itself
+    const sigValid = await this.receipts.verify(entry.receipt_id);
+    if (!sigValid.ok || !sigValid.value) return false;
+
+    // Verify output files on disk match hashes in receipt
+    for (const [filePath, storedHash] of Object.entries(receipt.output_hashes)) {
+      if (storedHash === 'sha256:MISSING') continue;
+      try {
+        const content = await fs.readFile(filePath);
+        const currentHash = `sha256:${createHash('sha256').update(content).digest('hex')}`;
+        if (currentHash !== storedHash) return false;
+      } catch {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   private async runLoop(state: TaskState): Promise<ServiceResult<void>> {
@@ -274,11 +375,18 @@ export class Conductor {
 
     const receiptId = receiptResult.ok ? receiptResult.value.receipt_id : undefined;
 
+    // Store the hash of the actual output file (not the input context hash) so
+    // --resume can detect if the output was modified between runs.
+    const outputFileHash = receiptResult.ok
+      ? (Object.values(receiptResult.value.output_hashes)[0] ?? ctx.value.contextHash)
+      : ctx.value.contextHash;
+
     // Update state: completed
     await this.stateStore.updateSubTask(subTaskId, {
       status: 'completed',
       completed_at: new Date().toISOString(),
-      output_hash: ctx.value.contextHash,
+      output_hash: outputFileHash,
+      output_dir: taskDir,
       receipt_id: receiptId,
     });
 

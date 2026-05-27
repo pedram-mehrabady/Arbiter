@@ -42,5 +42,8 @@ export type {
   ConductOptions,
 } from './types/index';
 
+export { TaskInitializer } from './task/TaskInitializer';
+
 export type { LLMProvider } from './providers/LLMProvider';
 export type { GateType, GateSpec } from './gates/GateRegistry';
+export type { InitOptions, InitResult } from './task/TaskInitializer';
