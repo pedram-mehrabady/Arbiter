@@ -309,18 +309,30 @@ taskCmd
   .option('--workspace <path>', 'Workspace root', process.cwd())
   .action(async (opts: Record<string, string>) => {
     const root = path.resolve(opts['workspace']);
-    const fs = await import('node:fs/promises');
+    const fsModule = await import('node:fs/promises');
     const tasksDir = path.join(root, '.arbiter', 'tasks');
     let entries: string[];
     try {
-      const dirents = await fs.readdir(tasksDir, { withFileTypes: true });
+      const dirents = await fsModule.readdir(tasksDir, { withFileTypes: true });
       entries = dirents.filter(d => d.isDirectory()).map(d => d.name);
     } catch {
       console.log('No tasks found (workspace not initialised or no tasks created yet).');
       return;
     }
     if (entries.length === 0) { console.log('No tasks found.'); return; }
-    entries.forEach(name => console.log(`  ${name}`));
+
+    // Read state.json to annotate the active task with its status
+    const store = new StateStore(root);
+    const stateResult = await store.read();
+    const activeTaskId = stateResult.ok ? stateResult.value.task_id : null;
+    const activeStatus = stateResult.ok ? stateResult.value.phase_status : null;
+
+    entries.forEach(name => {
+      const isActive = name === activeTaskId;
+      const statusStr = isActive && activeStatus ? `  [${activeStatus}]` : '';
+      const marker = isActive ? ' *' : '';
+      console.log(`  ${name}${marker}${statusStr}`);
+    });
   });
 
 taskCmd
