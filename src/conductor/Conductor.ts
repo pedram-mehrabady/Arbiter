@@ -220,7 +220,7 @@ export class Conductor {
           event: 'pipeline_complete',
           detail: 'All sub-tasks completed',
         });
-        console.log(`\n✓ Task ${taskId} complete. Assembling AFTA evidence bundle...`);
+        console.log(`\n✓ Task ${taskId} complete. Assembling audit evidence bundle...`);
 
         const bundleResult = await this.bundleAssembler.assemble(taskId, state);
         if (!bundleResult.ok) {
@@ -718,7 +718,7 @@ export class Conductor {
     });
   }
 
-  // ── P1-5: Debugger escalation (four AFTA constraints) ─────────────────────
+  // ── P1-5: Debugger escalation (four pipeline constraints) ───────────────────
 
   private async runDebuggerAgent(
     taskId: string,
@@ -899,7 +899,7 @@ export class Conductor {
     await this.decisionLog.logFailure(taskId, subTaskId, fc, newStrike, signal.stderr.slice(0, 300));
 
     if (shouldEscalateToDebugger) {
-      // P1-5: actual debugger escalation with four AFTA constraints
+      // P1-5: actual debugger escalation with four pipeline constraints
       await this.stateStore.updateSubTask(subTaskId, { strike: newStrike, last_failure_class: fc });
       const taskDir = path.join(this.options.workspaceRoot, '.arbiter', 'tasks', taskId);
       const originalOutputFile = path.join(taskDir, `${subTaskId}-output.md`);

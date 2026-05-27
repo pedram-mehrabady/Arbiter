@@ -72,14 +72,14 @@ Keys are written to `.arbiter/signing-key.pem` and `.arbiter/signing-key-pub.pem
   usage.jsonl             # Token/cost ledger
   pending-gates.json      # Active human gates (resolved = removed)
   signing-key.pem         # Ed25519 private key (keep secret)
-  signing-key-pub.pem     # Ed25519 public key (distribute with AFTA bundle)
+  signing-key-pub.pem     # Ed25519 public key (distribute with Audit bundle)
   tasks/
     <task-id>/
       task.md             # Copy of the feature spec
       <agent>-output.md   # Agent outputs (one file per agent)
   bundles/
-    <task-id>-AFTA-EVIDENCE-BUNDLE.zip   # Signed evidence ZIP
-    <task-id>-AFTA-EVIDENCE-BUNDLE.zip.sig
+    <task-id>-AUDIT-EVIDENCE-BUNDLE.zip   # Signed evidence ZIP
+    <task-id>-AUDIT-EVIDENCE-BUNDLE.zip.sig
   evidence-cache/
     design/               # Cached design artifacts (blast-radius skip)
   docs/
@@ -143,11 +143,11 @@ Shows each sub-task: `pending`, `in_progress`, `completed`, or `failed`, along w
 
 ### Step 5 — Task completion
 
-When all sub-tasks complete, Arbiter automatically assembles the AFTA-EVIDENCE-BUNDLE ZIP and prints:
+When all sub-tasks complete, Arbiter automatically assembles the AUDIT-EVIDENCE-BUNDLE ZIP and prints:
 
 ```
-✓ Task FEAT-42 complete. Assembling AFTA evidence bundle...
-  ✓ Bundle: .arbiter/bundles/FEAT-42-AFTA-EVIDENCE-BUNDLE.zip
+✓ Task FEAT-42 complete. Assembling Audit evidence bundle...
+  ✓ Bundle: .arbiter/bundles/FEAT-42-AUDIT-EVIDENCE-BUNDLE.zip
     ID: FEAT-42-bundle-20260527T180000Z
     ALC artifacts: 10 present
 ```
@@ -155,7 +155,7 @@ When all sub-tasks complete, Arbiter automatically assembles the AFTA-EVIDENCE-B
 ### Step 6 — Verify the bundle
 
 ```bash
-arbiter bundle verify .arbiter/bundles/FEAT-42-AFTA-EVIDENCE-BUNDLE.zip
+arbiter bundle verify .arbiter/bundles/FEAT-42-AUDIT-EVIDENCE-BUNDLE.zip
 # → ✓ Bundle signature valid
 #     Hash: sha256:abc123...
 ```
@@ -217,7 +217,7 @@ arbiter task init FEAT-42b --spec ./specs/FEAT-42b.md
 
 **What happens automatically:**
 - Debugger agent runs with Opus model
-- Four AFTA constraints are enforced (P-CRYPTO check, diff logged, new-abstraction block, >20% gate)
+- Four pipeline constraints are enforced (P-CRYPTO check, diff logged, new-abstraction block, >20% gate)
 - If debugger output is clean: sub-task completes, pipeline continues
 - If debugger output fails constraint 1 or 4: sub-task moves to `failed`
 
@@ -342,7 +342,7 @@ Every orchestrator decision is recorded here. Key events:
 | `plan_validation_pass` / `plan_validation_fail` | Plan agent complexity check |
 | `debugger_invoked` / `debugger_diff` | Debugger escalation events |
 | `design_phase_cache_hit` / `design_phase_skipped` | Blast-radius skip events |
-| `bundle_created` | AFTA-EVIDENCE-BUNDLE assembled |
+| `bundle_created` | AUDIT-EVIDENCE-BUNDLE assembled |
 | `pipeline_complete` | All sub-tasks done |
 
 ```bash
@@ -382,18 +382,18 @@ arbiter usage --workspace /path/to/foederata
 ### Verify a bundle
 
 ```bash
-arbiter bundle verify .arbiter/bundles/FEAT-42-AFTA-EVIDENCE-BUNDLE.zip \
+arbiter bundle verify .arbiter/bundles/FEAT-42-AUDIT-EVIDENCE-BUNDLE.zip \
   --workspace /path/to/foederata
 ```
 
 ---
 
-## 5. AFTA Submission Checklist
+## 5. Audit Submission Checklist
 
-For each completed feature task, the AFTA submission package consists of:
+For each completed feature task, the audit submission package consists of:
 
-- [ ] `.arbiter/bundles/<task-id>-AFTA-EVIDENCE-BUNDLE.zip` — the evidence ZIP
-- [ ] `.arbiter/bundles/<task-id>-AFTA-EVIDENCE-BUNDLE.zip.sig` — the sidecar signature file
+- [ ] `.arbiter/bundles/<task-id>-AUDIT-EVIDENCE-BUNDLE.zip` — the evidence ZIP
+- [ ] `.arbiter/bundles/<task-id>-AUDIT-EVIDENCE-BUNDLE.zip.sig` — the sidecar signature file
 - [ ] `.arbiter/signing-key-pub.pem` — public key for independent verification
 
 **Checklist before submission:**
@@ -403,7 +403,7 @@ For each completed feature task, the AFTA submission package consists of:
 arbiter audit verify --workspace /path/to/foederata
 
 # 2. Bundle verifies
-arbiter bundle verify .arbiter/bundles/<task-id>-AFTA-EVIDENCE-BUNDLE.zip
+arbiter bundle verify .arbiter/bundles/<task-id>-AUDIT-EVIDENCE-BUNDLE.zip
 
 # 3. All 10 ALC controls are present
 # (Shown in `arbiter bundle create` output and manifest.json inside ZIP)

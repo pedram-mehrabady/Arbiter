@@ -17,8 +17,8 @@ export interface DebuggerGuardResult {
   newAbstractions?: string[];
 }
 
-// Four AFTA-mandated constraints on debugger output (P1-5).
-// When an evaluator sees the debugger escalation path they ask:
+// Four Arbiter-enforced constraints on debugger output (P1-5).
+// When an auditor reviews the debugger escalation path they ask:
 //   who wrote this code, what rules governed it, can you prove it?
 // These constraints answer all three.
 

@@ -1,7 +1,7 @@
 # Arbiter Agent Manifest
 
 **Version:** 1.0 (2026-05-27)
-**Purpose:** Single-table reference covering all 14 pipeline agents. Serves as the P3-3 ADR substitute — one document an AFTA evaluator can read in 5 minutes.
+**Purpose:** Single-table reference covering all 14 pipeline agents. Serves as the P3-3 ADR substitute — one document a security evaluator can read in 5 minutes.
 
 ---
 

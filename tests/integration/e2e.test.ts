@@ -8,7 +8,7 @@
  *  [2] arbiter audit verify reports chain integrity PASS
  *  [3] decision-log contains all key pipeline events
  *  [4] plan agent injects granular sub-tasks (P1-3)
- *  [5] AFTA-EVIDENCE-BUNDLE.zip is created
+ *  [5] AUDIT-EVIDENCE-BUNDLE.zip is created
  *  [6] bundle verify returns valid=true
  *  [7] Bundle contains all 9 evidence directories
  *  [8] Model tiering: haiku for test-writer, opus for reviewer (from config)
@@ -219,10 +219,10 @@ the upload percentage in real-time.
 
   // ── [5] bundle created ────────────────────────────────────────────────────
 
-  it('[5] AFTA-EVIDENCE-BUNDLE.zip was created', async () => {
+  it('[5] AUDIT-EVIDENCE-BUNDLE.zip was created', async () => {
     const bundleDir = path.join(root, '.arbiter', 'bundles');
     const files = await fs.readdir(bundleDir);
-    const zips = files.filter(f => f.endsWith('-AFTA-EVIDENCE-BUNDLE.zip'));
+    const zips = files.filter(f => f.endsWith('-AUDIT-EVIDENCE-BUNDLE.zip'));
     expect(zips.length).toBeGreaterThan(0);
   });
 
@@ -231,7 +231,7 @@ the upload percentage in real-time.
   it('[6] bundle verify returns valid=true', async () => {
     const bundleDir = path.join(root, '.arbiter', 'bundles');
     const files = await fs.readdir(bundleDir);
-    const zip = files.find(f => f.endsWith('-AFTA-EVIDENCE-BUNDLE.zip'));
+    const zip = files.find(f => f.endsWith('-AUDIT-EVIDENCE-BUNDLE.zip'));
     expect(zip).toBeDefined();
 
     const assembler = new BundleAssembler(root);
@@ -245,7 +245,7 @@ the upload percentage in real-time.
   it('[7] bundle contains all 9 evidence directories', async () => {
     const bundleDir = path.join(root, '.arbiter', 'bundles');
     const files = await fs.readdir(bundleDir);
-    const zipFile = files.find(f => f.endsWith('-AFTA-EVIDENCE-BUNDLE.zip'));
+    const zipFile = files.find(f => f.endsWith('-AUDIT-EVIDENCE-BUNDLE.zip'));
     expect(zipFile).toBeDefined();
 
     const buf = await fs.readFile(path.join(bundleDir, zipFile!));

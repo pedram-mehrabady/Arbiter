@@ -75,7 +75,7 @@ export class BundleAssembler {
   async assemble(taskId: string, state: TaskState): Promise<ServiceResult<BundleResult>> {
     const taskDir = path.join(this.workspaceRoot, '.arbiter', 'tasks', taskId);
     const bundleDir = path.join(this.workspaceRoot, BUNDLE_DIR);
-    const zipPath = path.join(bundleDir, `${taskId}-AFTA-EVIDENCE-BUNDLE.zip`);
+    const zipPath = path.join(bundleDir, `${taskId}-AUDIT-EVIDENCE-BUNDLE.zip`);
     const sigPath = `${zipPath}.sig`;
 
     await fs.mkdir(bundleDir, { recursive: true });
@@ -289,7 +289,7 @@ export class BundleAssembler {
       const entries = await fs.readdir(bundleDir);
       return {
         ok: true,
-        value: entries.filter(e => e.endsWith('-AFTA-EVIDENCE-BUNDLE.zip')),
+        value: entries.filter(e => e.endsWith('-AUDIT-EVIDENCE-BUNDLE.zip')),
       };
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === 'ENOENT') {

@@ -35,7 +35,7 @@ export interface CacheEntry {
 // EvidenceCache stores approved design artifacts keyed by the sorted module set
 // they cover. When blast-radius analysis shows a new task touches only previously
 // approved modules with no new contracts or schemas, the design phase is skipped
-// and the cached artifacts are re-used — providing consistency evidence to AFTA
+// and the cached artifacts are re-used — providing consistency evidence to audit
 // evaluators rather than regenerating a predetermined result.
 
 export class EvidenceCache {

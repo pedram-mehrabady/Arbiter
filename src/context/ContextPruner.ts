@@ -6,7 +6,7 @@ const HEAD_KEEP_TOKENS = 500;
 const TAIL_KEEP_TOKENS = 200;
 const PRUNE_MARKER = '[PRUNED: {n} tokens]';
 
-// Never prune these sections — they are always mandatory for AFTA evidence integrity
+// Never prune these sections — they are always mandatory for audit evidence integrity
 const NEVER_PRUNE_HEADERS = ['# SYSTEM', '# TASK', '# FILE: task.md', '# FILE: MASTER-DIRECTIVES.md'];
 
 export class ContextPruner {

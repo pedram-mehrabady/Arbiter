@@ -273,11 +273,11 @@ queueCmd
 
 // ─── arbiter bundle ───────────────────────────────────────────────────────────
 
-const bundleCmd = program.command('bundle').description('AFTA evidence bundle management');
+const bundleCmd = program.command('bundle').description('Audit evidence bundle management');
 
 bundleCmd
   .command('create <task-id>')
-  .description('Assemble the AFTA-EVIDENCE-BUNDLE ZIP for a completed task')
+  .description('Assemble the AUDIT-EVIDENCE-BUNDLE ZIP for a completed task')
   .option('--workspace <path>', 'Workspace root', process.cwd())
   .action(async (taskId: string, opts: Record<string, string>) => {
     const root = path.resolve(opts['workspace']);
@@ -325,7 +325,7 @@ bundleCmd
 
 bundleCmd
   .command('verify <zip-path>')
-  .description('Verify the Ed25519 signature and hash of an AFTA-EVIDENCE-BUNDLE ZIP')
+  .description('Verify the Ed25519 signature and hash of an AUDIT-EVIDENCE-BUNDLE ZIP')
   .option('--workspace <path>', 'Workspace root (for signing key)', process.cwd())
   .action(async (zipPath: string, opts: Record<string, string>) => {
     const root = path.resolve(opts['workspace']);
@@ -345,7 +345,7 @@ bundleCmd
 
 bundleCmd
   .command('list')
-  .description('List all AFTA-EVIDENCE-BUNDLE ZIPs in the workspace')
+  .description('List all AUDIT-EVIDENCE-BUNDLE ZIPs in the workspace')
   .option('--workspace <path>', 'Workspace root', process.cwd())
   .action(async (opts: Record<string, string>) => {
     const root = path.resolve(opts['workspace']);
