@@ -1,0 +1,22 @@
+node_modules/
+dist/
+*.js.map
+*.d.ts.map
+
+# Runtime directories — never commit
+.arbiter/state.json
+.arbiter/decision-log.jsonl
+.arbiter/receipts.jsonl
+.arbiter/usage.jsonl
+.arbiter/pending-gates.json
+.arbiter/bundles/
+.arbiter/signing-key.pem
+
+# Keep these in git
+!.arbiter/.gitkeep
+
+# OS / editor
+.DS_Store
+.env
+*.local
+.vscode/settings.json
