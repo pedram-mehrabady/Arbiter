@@ -14,6 +14,10 @@ import { PreflightCheck } from '../preflight/PreflightCheck';
 import { ContextAssembler } from '../context/ContextAssembler';
 import { ContextPruner } from '../context/ContextPruner';
 import { EvidenceCache } from '../evidence/EvidenceCache';
+import { scanProject, formatProfile } from '../bootstrap/Scanner';
+import { runInterview } from '../bootstrap/Interview';
+import { generateConfig } from '../bootstrap/ConfigGenerator';
+import { registerProject } from '../bootstrap/ProjectRegistry';
 
 const program = new Command();
 
@@ -21,6 +25,40 @@ program
   .name('arbiter')
   .description('Deterministic multi-agent AI pipeline for structured feature delivery')
   .version('0.1.0');
+
+// ─── arbiter init ─────────────────────────────────────────────────────────────
+
+program
+  .command('init')
+  .description('Set up Arbiter in this project — scans your repo and generates arbiter.config.json')
+  .option('--workspace <path>', 'Workspace root (default: cwd)', process.cwd())
+  .action(async (opts: Record<string, string>) => {
+    const workspaceRoot = path.resolve(opts['workspace']);
+
+    console.log(`\nArbiter init — scanning ${workspaceRoot}...\n`);
+
+    const profile = await scanProject(workspaceRoot);
+    console.log(formatProfile(profile));
+
+    const answers = await runInterview(profile);
+
+    const configResult = await generateConfig(workspaceRoot, answers);
+    if (!configResult.ok) {
+      console.error(`\nError: ${configResult.error}`);
+      process.exit(1);
+    }
+
+    const projectId = answers.projectName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    await registerProject(projectId, answers.projectName, workspaceRoot);
+
+    console.log(`\n✓ arbiter.config.json written`);
+    console.log(`  agents/docs/master-directives.md created`);
+    console.log(`  Project registered in ~/.arbiter/projects.json`);
+    console.log(`\nNext steps:`);
+    console.log(`  1. Create a task spec (e.g. my-feature-spec.md)`);
+    console.log(`  2. arbiter task init <task-id> --spec my-feature-spec.md`);
+    console.log(`  3. arbiter conduct <task-id>`);
+  });
 
 // ─── arbiter conduct ──────────────────────────────────────────────────────────
 

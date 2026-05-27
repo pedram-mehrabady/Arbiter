@@ -382,6 +382,7 @@ the upload percentage in real-time.
         autoApproveGates: true,
       });
       const result = await conductor.conduct(resumeTaskId);
+      if (!result.ok) throw new Error(`Resume failed: ${result.error} (${result.code ?? 'no code'})`);
       expect(result.ok).toBe(true);
 
       // Decision log should show resume_reset_in_progress for research

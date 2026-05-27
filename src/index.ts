@@ -60,3 +60,10 @@ export type { InitOptions, InitResult } from './task/TaskInitializer';
 export type { BundleResult } from './bundle/BundleAssembler';
 export type { BundleManifest, ALCControl } from './bundle/BundleManifest';
 export type { GitCommit } from './bundle/GitCommitReader';
+
+export { scanProject, formatProfile } from './bootstrap/Scanner';
+export { generateConfig } from './bootstrap/ConfigGenerator';
+export { registerProject, listProjects } from './bootstrap/ProjectRegistry';
+export type { ProjectProfile } from './bootstrap/Scanner';
+export type { InterviewAnswers } from './bootstrap/Interview';
+export type { ProjectEntry, ProjectRegistry } from './bootstrap/ProjectRegistry';
