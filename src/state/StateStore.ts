@@ -28,7 +28,7 @@ export class StateStore {
     try {
       await fs.mkdir(path.dirname(this.filePath), { recursive: true });
       state.updated_at = new Date().toISOString();
-      const tmpPath = `${this.filePath}.tmp.${process.pid}`;
+      const tmpPath = `${this.filePath}.tmp.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}`;
       await fs.writeFile(tmpPath, JSON.stringify(state, null, 2), 'utf-8');
       await fs.rename(tmpPath, this.filePath);
       return { ok: true, value: undefined };

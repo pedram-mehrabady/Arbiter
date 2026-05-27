@@ -129,7 +129,7 @@ export class EvidenceCache {
     };
 
     try {
-      const tmp = `${entryPath}.tmp.${process.pid}`;
+      const tmp = `${entryPath}.tmp.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}`;
       await fs.writeFile(tmp, JSON.stringify(entry, null, 2), 'utf-8');
       await fs.rename(tmp, entryPath);
       return { ok: true, value: undefined };

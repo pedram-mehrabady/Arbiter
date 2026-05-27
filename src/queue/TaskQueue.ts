@@ -108,7 +108,7 @@ export class TaskQueue {
   private async writeAll(tasks: QueuedTask[]): Promise<ServiceResult<void>> {
     try {
       await fs.mkdir(path.dirname(this.queuePath), { recursive: true });
-      const tmp = `${this.queuePath}.tmp.${process.pid}`;
+      const tmp = `${this.queuePath}.tmp.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}`;
       await fs.writeFile(tmp, JSON.stringify(tasks, null, 2), 'utf-8');
       await fs.rename(tmp, this.queuePath);
       return { ok: true, value: undefined };
