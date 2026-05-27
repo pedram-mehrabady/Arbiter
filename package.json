@@ -1,5 +1,5 @@
 {
-  "name": "@arbiter-pipeline/cli",
+  "name": "arbiter-pipeline",
   "version": "0.1.0",
   "description": "Deterministic multi-agent AI pipeline for structured feature delivery with ALC evidence generation",
   "keywords": [

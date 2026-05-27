@@ -5,7 +5,7 @@
 Arbiter is an open-source, human-in-the-loop AI development pipeline. It runs 13 specialized agents in a fixed sequence — reframe, research, design, design-critic, integrator, plan, implementation agents, reviewer, tech-writer — and pauses at human gates before each major phase transition. Every agent output is signed with Ed25519 and collected into a signed AUDIT-EVIDENCE-BUNDLE.zip for compliance audit.
 
 - CLI: `arbiter`
-- Package: `@arbiter-pipeline/cli`
+- Package: `arbiter-pipeline`
 - GitHub: [pedram-mehrabady/Arbiter](https://github.com/pedram-mehrabady/Arbiter)
 
 ---
@@ -40,7 +40,7 @@ Most AI coding tools sit at one of two extremes: co-pilots that assist line by l
 ## Install
 
 ```
-npm install -g @arbiter-pipeline/cli
+npm install -g arbiter-pipeline
 ```
 
 Requires Node 18+ and the [Claude Code CLI](https://github.com/anthropics/claude-code).
