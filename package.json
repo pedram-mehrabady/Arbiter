@@ -2,7 +2,15 @@
   "name": "@arbiter-pipeline/cli",
   "version": "0.1.0",
   "description": "Deterministic multi-agent AI pipeline for structured feature delivery with ALC evidence generation",
-  "keywords": ["ai", "pipeline", "agents", "llm", "automation", "afta", "evidence"],
+  "keywords": [
+    "ai",
+    "pipeline",
+    "agents",
+    "llm",
+    "automation",
+    "afta",
+    "evidence"
+  ],
   "author": "Arbiter Pipeline Contributors",
   "license": "MIT",
   "bin": {
@@ -10,8 +18,14 @@
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "files": ["dist/", "README.md", "LICENSE"],
-  "engines": { "node": ">=18.0.0" },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/cli/index.ts",
@@ -20,10 +34,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "commander": "^12.1.0"
+    "commander": "^12.1.0",
+    "fflate": "^0.8.3"
   },
   "devDependencies": {
-    "@types/node": "^20.14.0",
+    "@types/node": "^20.19.41",
     "tsx": "^4.16.0",
     "typescript": "^5.5.0",
     "vitest": "^1.6.0"

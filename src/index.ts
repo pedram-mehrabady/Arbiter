@@ -43,7 +43,13 @@ export type {
 } from './types/index';
 
 export { TaskInitializer } from './task/TaskInitializer';
+export { BundleAssembler } from './bundle/BundleAssembler';
+export { BundleManifestBuilder, ALC_ARTIFACT_MAP, ALC_CONTROLS } from './bundle/BundleManifest';
+export { GitCommitReader } from './bundle/GitCommitReader';
 
 export type { LLMProvider } from './providers/LLMProvider';
 export type { GateType, GateSpec } from './gates/GateRegistry';
 export type { InitOptions, InitResult } from './task/TaskInitializer';
+export type { BundleResult } from './bundle/BundleAssembler';
+export type { BundleManifest, ALCControl } from './bundle/BundleManifest';
+export type { GitCommit } from './bundle/GitCommitReader';

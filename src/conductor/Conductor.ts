@@ -24,6 +24,7 @@ import { RateLimiter } from '../queue/RateLimiter';
 import { TaskQueue } from '../queue/TaskQueue';
 import { ContextAssembler } from '../context/ContextAssembler';
 import { ContextPruner } from '../context/ContextPruner';
+import { BundleAssembler } from '../bundle/BundleAssembler';
 
 const CONFIG_FILE = 'arbiter.config.json';
 const FALLBACK_CONFIG_FILE = 'factory-config.json';
@@ -46,6 +47,7 @@ export class Conductor {
   private readonly rateLimiter: RateLimiter;
   private readonly contextAssembler: ContextAssembler;
   private readonly contextPruner = new ContextPruner();
+  private readonly bundleAssembler: BundleAssembler;
   private provider: LLMProvider;
   private config: FactoryConfig | null = null;
   private readonly options: ConductOptions;
@@ -60,6 +62,7 @@ export class Conductor {
     this.gatePoller = new GatePoller(root, this.decisionLog);
     this.rateLimiter = new RateLimiter(root);
     this.contextAssembler = new ContextAssembler(root);
+    this.bundleAssembler = new BundleAssembler(root);
     this.provider = new AnthropicProvider();
   }
 
@@ -204,8 +207,27 @@ export class Conductor {
       state = fresh.value;
 
       if (TaskQueue.isComplete(state)) {
-        await this.decisionLog.append({ task_id: taskId, event: 'pipeline_complete', detail: 'All sub-tasks completed' });
-        console.log(`\n✓ Task ${taskId} complete.`);
+        await this.decisionLog.append({
+          task_id: taskId,
+          event: 'pipeline_complete',
+          detail: 'All sub-tasks completed',
+        });
+        console.log(`\n✓ Task ${taskId} complete. Assembling AFTA evidence bundle...`);
+
+        const bundleResult = await this.bundleAssembler.assemble(taskId, state);
+        if (!bundleResult.ok) {
+          console.warn(`  ⚠ Bundle assembly failed: ${bundleResult.error}`);
+          console.warn(`    Run 'arbiter bundle create ${taskId}' to retry.`);
+        } else {
+          const { zipPath, bundleId, presentArtifacts, missingArtifacts } = bundleResult.value;
+          console.log(`  ✓ Bundle: ${zipPath}`);
+          console.log(`    ID: ${bundleId}`);
+          console.log(`    ALC artifacts: ${presentArtifacts.length} present`);
+          if (missingArtifacts.length > 0) {
+            console.warn(`    Missing: ${missingArtifacts.join(', ')}`);
+          }
+        }
+
         return { ok: true, value: undefined };
       }
 

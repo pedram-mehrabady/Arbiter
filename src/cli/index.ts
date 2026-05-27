@@ -9,6 +9,7 @@ import { RateLimiter } from '../queue/RateLimiter';
 import { TaskQueue } from '../queue/TaskQueue';
 import { StateStore } from '../state/StateStore';
 import { TaskInitializer } from '../task/TaskInitializer';
+import { BundleAssembler } from '../bundle/BundleAssembler';
 
 const program = new Command();
 
@@ -264,6 +265,94 @@ queueCmd
     if (!result.ok) { console.error(result.error); process.exit(1); }
     if (result.value.length === 0) { console.log('Queue empty.'); return; }
     result.value.forEach(t => console.log(`  [${t.priority}] ${t.task_id}  ${t.queued_at}`));
+  });
+
+// ─── arbiter bundle ───────────────────────────────────────────────────────────
+
+const bundleCmd = program.command('bundle').description('AFTA evidence bundle management');
+
+bundleCmd
+  .command('create <task-id>')
+  .description('Assemble the AFTA-EVIDENCE-BUNDLE ZIP for a completed task')
+  .option('--workspace <path>', 'Workspace root', process.cwd())
+  .action(async (taskId: string, opts: Record<string, string>) => {
+    const root = path.resolve(opts['workspace']);
+    const store = new StateStore(root);
+    const stateResult = await store.read();
+    if (!stateResult.ok) { console.error(stateResult.error); process.exit(1); }
+
+    const { task_id, phase_status, sub_tasks } = stateResult.value;
+    if (task_id !== taskId) {
+      console.error(`State is for task "${task_id}", not "${taskId}"`);
+      process.exit(1);
+    }
+
+    const pendingCount = Object.values(sub_tasks).filter(e => e.status !== 'completed').length;
+    if (pendingCount > 0) {
+      console.warn(
+        `Warning: task has ${pendingCount} non-completed sub-task(s). Bundle will reflect partial evidence.`,
+      );
+    }
+
+    console.log(`Assembling evidence bundle for ${taskId}...`);
+    const assembler = new BundleAssembler(root);
+    const result = await assembler.assemble(taskId, stateResult.value);
+    if (!result.ok) { console.error(`Bundle failed: ${result.error}`); process.exit(1); }
+
+    const { zipPath, sigPath, bundleId, manifest, presentArtifacts, missingArtifacts } = result.value;
+
+    console.log(`\n✓ Bundle created`);
+    console.log(`  Bundle ID:  ${bundleId}`);
+    console.log(`  ZIP:        ${zipPath}`);
+    console.log(`  Signature:  ${sigPath}`);
+    console.log(`  Feature:    ${manifest.feature_name}`);
+    console.log(`  Completed:  ${manifest.completed_at}`);
+    console.log(`\n  ALC controls covered (${manifest.alc_controls_covered.length}):`);
+    manifest.alc_controls_covered.forEach(c => console.log(`    ✓ ${c}`));
+    if (missingArtifacts.length > 0) {
+      console.log(`\n  Missing artifacts (${missingArtifacts.length}):`);
+      missingArtifacts.forEach(a => console.log(`    ✗ ${a}`));
+    }
+    console.log(`\n  Git commits: ${manifest.git_commits.length}`);
+    console.log(`  Receipts:    ${manifest.receipts.length}`);
+
+    void phase_status; // used in warning above
+  });
+
+bundleCmd
+  .command('verify <zip-path>')
+  .description('Verify the Ed25519 signature and hash of an AFTA-EVIDENCE-BUNDLE ZIP')
+  .option('--workspace <path>', 'Workspace root (for signing key)', process.cwd())
+  .action(async (zipPath: string, opts: Record<string, string>) => {
+    const root = path.resolve(opts['workspace']);
+    const assembler = new BundleAssembler(root);
+    const result = await assembler.verify(path.resolve(zipPath));
+    if (!result.ok) { console.error(result.error); process.exit(1); }
+
+    if (result.value.valid) {
+      console.log(`✓ Bundle signature valid`);
+      console.log(`  Hash: ${result.value.bundleHash}`);
+    } else {
+      console.error(`✗ Bundle signature INVALID`);
+      console.error(`  Hash: ${result.value.bundleHash}`);
+      process.exit(1);
+    }
+  });
+
+bundleCmd
+  .command('list')
+  .description('List all AFTA-EVIDENCE-BUNDLE ZIPs in the workspace')
+  .option('--workspace <path>', 'Workspace root', process.cwd())
+  .action(async (opts: Record<string, string>) => {
+    const root = path.resolve(opts['workspace']);
+    const assembler = new BundleAssembler(root);
+    const result = await assembler.listBundles();
+    if (!result.ok) { console.error(result.error); process.exit(1); }
+    if (result.value.length === 0) {
+      console.log('No bundles found.');
+    } else {
+      result.value.forEach(b => console.log(`  ${b}`));
+    }
   });
 
 program.parseAsync(process.argv).catch(err => {

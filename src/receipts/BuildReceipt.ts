@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { createHash, createSign, createVerify, generateKeyPairSync } from 'node:crypto';
+import { createHash, sign as cryptoSign, verify as cryptoVerify, generateKeyPairSync } from 'node:crypto';
 import { BuildReceipt, AgentRole, FailureClass, ServiceResult } from '../types/index';
 
 const RECEIPTS_FILE = path.join('.arbiter', 'receipts.jsonl');
@@ -120,9 +120,13 @@ export class BuildReceiptStore {
     try {
       const publicKey = await fs.readFile(this.publicKeyPath, 'utf-8');
       const { signature, signer_public_key_fingerprint: _fp, ...payload } = receipt;
-      const verifier = createVerify('ed25519');
-      verifier.update(JSON.stringify(payload));
-      const valid = verifier.verify(publicKey, signature, 'base64');
+      // Ed25519: pass null algorithm — the curve handles hashing internally
+      const valid = cryptoVerify(
+        null,
+        Buffer.from(JSON.stringify(payload)),
+        publicKey,
+        Buffer.from(signature, 'base64'),
+      );
       return { ok: true, value: valid };
     } catch (err) {
       return { ok: false, error: `Verification failed: ${String(err)}` };
@@ -170,9 +174,8 @@ export class BuildReceiptStore {
   }
 
   private sign(payload: string, privateKeyPem: string): string {
-    const signer = createSign('ed25519');
-    signer.update(payload);
-    return signer.sign(privateKeyPem, 'base64');
+    // Ed25519: pass null algorithm — the curve handles hashing internally
+    return cryptoSign(null, Buffer.from(payload), privateKeyPem).toString('base64');
   }
 
   private fingerprintPublicKey(publicKeyPem: string): string {
