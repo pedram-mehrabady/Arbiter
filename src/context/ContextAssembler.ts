@@ -4,6 +4,15 @@ import { createHash } from 'node:crypto';
 import { AgentRole, AssembledContext, ServiceResult } from '../types/index';
 import { estimateTokenCount } from '../providers/LLMProvider';
 
+export type TemplateVars = Partial<{
+  STACK_FRONTEND: string;
+  STACK_BACKEND: string;
+  STACK_DATABASE: string;
+  STACK_TEST_FRAMEWORK: string;
+  PROJECT_CONVENTIONS: string;
+  PROJECT_NAME: string;
+}>;
+
 // Each agent role declares which files it needs. Agents never receive files
 // outside this allowlist — this is the agent context scoping principle.
 const AGENT_CONTEXT_MANIFESTS: Record<AgentRole, string[]> = {
@@ -40,11 +49,15 @@ export class ContextAssembler {
     systemPrompt: string,
     userPrompt: string,
     overrideFiles?: string[],
+    templateVars?: TemplateVars,
   ): Promise<ServiceResult<AssembledContext>> {
     const contextFilePaths = overrideFiles ?? AGENT_CONTEXT_MANIFESTS[role] ?? [];
 
+    // Load agent template and substitute placeholders
+    const resolvedSystemPrompt = await this.buildSystemPrompt(role, systemPrompt, templateVars);
+
     const resolvedFiles = await this.resolveFiles(contextFilePaths, taskDir);
-    const sections: string[] = [`# SYSTEM\n\n${systemPrompt}`];
+    const sections: string[] = [`# SYSTEM\n\n${resolvedSystemPrompt}`];
     const includedFiles: string[] = [];
 
     for (const filePath of resolvedFiles) {
@@ -79,6 +92,37 @@ export class ContextAssembler {
 
   getContextFiles(role: AgentRole): string[] {
     return AGENT_CONTEXT_MANIFESTS[role] ?? [];
+  }
+
+  private async buildSystemPrompt(
+    role: AgentRole,
+    passedPrompt: string,
+    vars?: TemplateVars,
+  ): Promise<string> {
+    // If a non-empty prompt was explicitly passed, use it (tests inject their own)
+    if (passedPrompt.trim()) return passedPrompt;
+
+    // Try to load agents/templates/<role>.md from workspace root
+    const templatePath = path.join(this.workspaceRoot, 'agents', 'templates', `${role}.md`);
+    try {
+      const raw = await fs.readFile(templatePath, 'utf-8');
+      return vars ? this.substituteVars(raw, vars) : raw;
+    } catch {
+      // Template file absent — return empty string (keeps existing behaviour)
+      return '';
+    }
+  }
+
+  private substituteVars(template: string, vars: TemplateVars): string {
+    let result = template;
+    for (const [key, value] of Object.entries(vars)) {
+      if (value !== undefined) {
+        result = result.replaceAll(`{{${key}}}`, value);
+      }
+    }
+    // Clear any remaining unfilled placeholders so agents don't see raw {{...}}
+    result = result.replace(/\{\{[A-Z_]+\}\}/g, '(not specified)');
+    return result;
   }
 
   private async resolveFiles(patterns: string[], taskDir: string): Promise<string[]> {

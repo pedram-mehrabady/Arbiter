@@ -2,6 +2,23 @@ import { createInterface } from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import { ProjectProfile } from './Scanner';
 
+// Build answers from detected profile with no user input.
+export function buildDefaultAnswers(detected: ProjectProfile): InterviewAnswers {
+  return {
+    projectName:   detected.name,
+    provider:      'claude_max_cli',
+    providerModel: 'claude-sonnet-4-6',
+    stackFrontend: detected.stackFrontend,
+    stackBackend:  detected.stackBackend,
+    stackDatabase: detected.stackDatabase,
+    testFramework: detected.testFramework,
+    designSystem:  'none',
+    conventions:   '',
+    audience:      'public',
+    gates:         { design: true, plan: true, review: true },
+  };
+}
+
 export interface InterviewAnswers {
   projectName: string;
   provider: 'claude_max_cli' | 'anthropic_sdk' | 'ollama';

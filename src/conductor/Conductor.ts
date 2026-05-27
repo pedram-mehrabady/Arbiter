@@ -24,7 +24,7 @@ import { GatePoller } from '../gates/GatePoller';
 import { GateRegistry } from '../gates/GateRegistry';
 import { RateLimiter } from '../queue/RateLimiter';
 import { TaskQueue } from '../queue/TaskQueue';
-import { ContextAssembler } from '../context/ContextAssembler';
+import { ContextAssembler, TemplateVars } from '../context/ContextAssembler';
 import { ContextPruner } from '../context/ContextPruner';
 import { BundleAssembler } from '../bundle/BundleAssembler';
 import { PlanValidator } from '../plan/PlanValidator';
@@ -331,7 +331,7 @@ export class Conductor {
     await this.decisionLog.logAgentStart(taskId, subTaskId, agentRole, model);
 
     // Assemble context
-    const ctxResult = await this.contextAssembler.assemble(agentRole, taskDir, '', '');
+    const ctxResult = await this.contextAssembler.assemble(agentRole, taskDir, '', '', undefined, this.buildTemplateVars());
     if (!ctxResult.ok) {
       await this.handleInfraFailure(taskId, subTaskId, `Context assembly failed: ${ctxResult.error}`);
       return { success: false, failureClass: 'infrastructure', errorMessage: ctxResult.error };
@@ -462,7 +462,7 @@ export class Conductor {
 
     // Check if a gate should fire after this agent
     const gateSpec = this.gateRegistry.getGateAfterAgent(agentRole);
-    if (gateSpec) {
+    if (gateSpec && this.isGateEnabled(gateSpec.type)) {
       const updatedState = await this.stateStore.read();
       if (updatedState.ok) {
         await this.gatePoller.createGate(
@@ -748,7 +748,7 @@ export class Conductor {
     }
 
     // Assemble debugger-specific context (includes original output + failure context)
-    const ctxResult = await this.contextAssembler.assemble('debugger', taskDir, '', '');
+    const ctxResult = await this.contextAssembler.assemble('debugger', taskDir, '', '', undefined, this.buildTemplateVars());
     if (!ctxResult.ok) {
       await this.handleInfraFailure(taskId, subTaskId, `Debugger context assembly failed: ${ctxResult.error}`);
       return { success: false, failureClass: 'infrastructure', errorMessage: ctxResult.error };
@@ -982,6 +982,29 @@ export class Conductor {
       error: `Config not found. Create arbiter.config.json in ${this.options.workspaceRoot}`,
       code: 'CONFIG_NOT_FOUND',
     };
+  }
+
+  private buildTemplateVars(): TemplateVars | undefined {
+    const tv = this.config?.template_vars;
+    if (!tv) return undefined;
+    return {
+      PROJECT_NAME:         tv.PROJECT_NAME,
+      STACK_FRONTEND:       tv.STACK_FRONTEND,
+      STACK_BACKEND:        tv.STACK_BACKEND,
+      STACK_DATABASE:       tv.STACK_DATABASE,
+      STACK_TEST_FRAMEWORK: tv.STACK_TEST_FRAMEWORK,
+      PROJECT_CONVENTIONS:  tv.PROJECT_CONVENTIONS,
+    };
+  }
+
+  // Gates default to enabled when not specified (safe default: always ask).
+  private isGateEnabled(gateType: import('../gates/GateRegistry').GateType): boolean {
+    const gates = this.config?.gates;
+    if (!gates) return true;
+    if (gateType === 'design_approval') return gates.design;
+    if (gateType === 'plan_approval')   return gates.plan;
+    if (gateType === 'review_approval') return gates.review;
+    return true; // debugger_major_rewrite is always enabled
   }
 }
 

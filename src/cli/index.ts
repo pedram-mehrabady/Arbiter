@@ -15,7 +15,7 @@ import { ContextAssembler } from '../context/ContextAssembler';
 import { ContextPruner } from '../context/ContextPruner';
 import { EvidenceCache } from '../evidence/EvidenceCache';
 import { scanProject, formatProfile } from '../bootstrap/Scanner';
-import { runInterview } from '../bootstrap/Interview';
+import { runInterview, buildDefaultAnswers } from '../bootstrap/Interview';
 import { generateConfig } from '../bootstrap/ConfigGenerator';
 import { registerProject } from '../bootstrap/ProjectRegistry';
 
@@ -32,15 +32,19 @@ program
   .command('init')
   .description('Set up Arbiter in this project — scans your repo and generates arbiter.config.json')
   .option('--workspace <path>', 'Workspace root (default: cwd)', process.cwd())
-  .action(async (opts: Record<string, string>) => {
-    const workspaceRoot = path.resolve(opts['workspace']);
+  .option('--non-interactive', 'Accept all detected defaults — no prompts (useful for CI)', false)
+  .action(async (opts: Record<string, string | boolean>) => {
+    const workspaceRoot = path.resolve(opts['workspace'] as string);
+    const nonInteractive = Boolean(opts['non-interactive']);
 
     console.log(`\nArbiter init — scanning ${workspaceRoot}...\n`);
 
     const profile = await scanProject(workspaceRoot);
     console.log(formatProfile(profile));
 
-    const answers = await runInterview(profile);
+    const answers = nonInteractive
+      ? (console.log('Non-interactive mode — using detected defaults.\n'), buildDefaultAnswers(profile))
+      : await runInterview(profile);
 
     const configResult = await generateConfig(workspaceRoot, answers);
     if (!configResult.ok) {

@@ -13,6 +13,7 @@ export { GateRegistry } from './gates/GateRegistry';
 export { RateLimiter } from './queue/RateLimiter';
 export { TaskQueue } from './queue/TaskQueue';
 export { ContextAssembler } from './context/ContextAssembler';
+export type { TemplateVars } from './context/ContextAssembler';
 export { ContextPruner } from './context/ContextPruner';
 export { AnthropicProvider } from './providers/AnthropicProvider';
 export { AnthropicSdkProvider } from './providers/AnthropicSdkProvider';
@@ -35,6 +36,8 @@ export type {
   LLMResponse,
   RateLimitInfo,
   FactoryConfig,
+  GatesConfig,
+  TemplateVarsConfig,
   AgentConfig,
   BlastRadius,
   GateDefinition,
@@ -68,4 +71,5 @@ export { generateConfig } from './bootstrap/ConfigGenerator';
 export { registerProject, listProjects } from './bootstrap/ProjectRegistry';
 export type { ProjectProfile } from './bootstrap/Scanner';
 export type { InterviewAnswers } from './bootstrap/Interview';
+export { buildDefaultAnswers } from './bootstrap/Interview';
 export type { ProjectEntry, ProjectRegistry } from './bootstrap/ProjectRegistry';

@@ -59,6 +59,15 @@ export async function generateConfig(
 
   const config = {
     auto_merge: false,
+    gates: { design: answers.gates.design, plan: answers.gates.plan, review: answers.gates.review },
+    template_vars: {
+      PROJECT_NAME:         answers.projectName,
+      STACK_FRONTEND:       answers.stackFrontend !== 'none' ? answers.stackFrontend : undefined,
+      STACK_BACKEND:        answers.stackBackend  !== 'none' ? answers.stackBackend  : undefined,
+      STACK_DATABASE:       answers.stackDatabase !== 'none' ? answers.stackDatabase : undefined,
+      STACK_TEST_FRAMEWORK: answers.testFramework !== 'none' ? answers.testFramework : undefined,
+      PROJECT_CONVENTIONS:  answers.conventions   || undefined,
+    },
     providers: buildProviderConfig(answers),
     roles: buildRoles(answers),
   };

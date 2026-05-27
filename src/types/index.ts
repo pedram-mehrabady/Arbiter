@@ -148,10 +148,27 @@ export interface ProviderConfig {
   endpoint?: string;
 }
 
+export interface GatesConfig {
+  design: boolean;
+  plan: boolean;
+  review: boolean;
+}
+
+export interface TemplateVarsConfig {
+  PROJECT_NAME?: string;
+  STACK_FRONTEND?: string;
+  STACK_BACKEND?: string;
+  STACK_DATABASE?: string;
+  STACK_TEST_FRAMEWORK?: string;
+  PROJECT_CONVENTIONS?: string;
+}
+
 export interface FactoryConfig {
   auto_merge: boolean;
   roles: Record<string, AgentConfig>;
   providers: Record<string, ProviderConfig>;
+  gates?: GatesConfig;
+  template_vars?: TemplateVarsConfig;
 }
 
 // ─── Blast radius ─────────────────────────────────────────────────────────────
