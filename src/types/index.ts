@@ -112,6 +112,7 @@ export interface LLMRequest {
   assembledPrompt: string;
   maxTokens: number;
   timeoutMs: number;
+  agentRole?: string;
 }
 
 export interface RateLimitInfo {
@@ -217,4 +218,9 @@ export interface ConductOptions {
   workspaceRoot: string;
   maxParallel: number;
   dryRun: boolean;
+  // Optional provider override — injected by integration tests via MockProvider
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  provider?: any;
+  // Auto-approve all human gates — integration tests only, never use in production
+  autoApproveGates?: boolean;
 }

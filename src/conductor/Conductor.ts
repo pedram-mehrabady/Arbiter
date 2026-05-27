@@ -71,7 +71,7 @@ export class Conductor {
     this.contextAssembler = new ContextAssembler(root);
     this.bundleAssembler = new BundleAssembler(root);
     this.evidenceCache = new EvidenceCache(root);
-    this.provider = new AnthropicProvider();
+    this.provider = (options.provider as LLMProvider | undefined) ?? new AnthropicProvider();
   }
 
   async conduct(taskId: string): Promise<ServiceResult<void>> {
@@ -268,6 +268,13 @@ export class Conductor {
       if (!pendingResult.ok) return pendingResult;
       if (pendingResult.value.length > 0) {
         const gate = pendingResult.value[0];
+
+        if (this.options.autoApproveGates) {
+          // Test-only path: resolve gate immediately without human input
+          await this.gatePoller.resolve(gate.gate_id, 'approved', 'auto-approved (test mode)');
+          continue;
+        }
+
         const waitResult = await this.gatePoller.waitForApproval(gate.gate_id);
         if (!waitResult.ok) return waitResult;
         if (waitResult.value === 'rejected') {
@@ -365,6 +372,7 @@ export class Conductor {
       assembledPrompt: ctx.value.prompt,
       maxTokens: 8192,
       timeoutMs: 300_000,
+      agentRole,
     });
 
     if (!llmResult.ok) {
@@ -752,6 +760,7 @@ export class Conductor {
       assembledPrompt: ctx.value.prompt,
       maxTokens: 8192,
       timeoutMs: 300_000,
+      agentRole: 'debugger',
     });
 
     if (!llmResult.ok) {
@@ -937,18 +946,26 @@ export class Conductor {
         const content = await fs.readFile(loc, 'utf-8');
         this.config = JSON.parse(content) as FactoryConfig;
 
-        const providerConfig = Object.values(this.config.providers)[0];
-        if (providerConfig?.cmd) {
-          this.provider = new AnthropicProvider({
-            cmd: providerConfig.cmd,
-            headlessFlag: providerConfig.headless_flag ?? '-p',
-          });
+        // Only configure provider from config if none was injected
+        if (!this.options.provider) {
+          const providerConfig = Object.values(this.config.providers)[0];
+          if (providerConfig?.cmd) {
+            this.provider = new AnthropicProvider({
+              cmd: providerConfig.cmd,
+              headlessFlag: providerConfig.headless_flag ?? '-p',
+            });
+          }
         }
 
         return { ok: true, value: undefined };
       } catch {
         continue;
       }
+    }
+
+    // If a provider was injected (e.g. MockProvider in tests), config is optional
+    if (this.options.provider) {
+      return { ok: true, value: undefined };
     }
 
     return {

@@ -35,6 +35,20 @@ const ARTIFACT_SOURCE_MAP: Array<{
   { dest: 'manifest.json',                          srcFile: null,                         generated: true  },
 ];
 
+// When plan injection renames a sub-task (e.g. 'test-dms-progress' instead of 'test-writer'),
+// fall back to finding the sub-task by agent_role and using its output file.
+const DEST_TO_ROLE: Record<string, string> = {
+  '01-requirements/reframe-output.md':      'reframe',
+  '02-impact-analysis/research-output.md':  'research',
+  '03-design/design.md':                    'design',
+  '03-design/design-critic.md':             'design-critic',
+  '03-design/integrator-output.md':         'integrator',
+  '04-implementation-plan/plan-output.md':  'plan',
+  '06-tests/test-writer-output.md':         'test-writer',
+  '07-review/reviewer-report.md':           'reviewer',
+  '08-documentation/tech-writer-output.md': 'tech-writer',
+};
+
 export interface BundleResult {
   zipPath: string;
   sigPath: string;
@@ -92,7 +106,23 @@ export class BundleAssembler {
     for (const { dest, srcFile, generated } of ARTIFACT_SOURCE_MAP) {
       if (generated) continue; // handled below
 
-      const srcPath = path.join(taskDir, srcFile!);
+      let srcPath = path.join(taskDir, srcFile!);
+
+      // If the canonical output file doesn't exist, check whether plan injection
+      // renamed the sub-task (e.g. 'test-dms-progress' instead of 'test-writer').
+      const roleForDest = DEST_TO_ROLE[dest];
+      if (roleForDest) {
+        try {
+          await fs.access(srcPath);
+        } catch {
+          const injected = Object.entries(state.sub_tasks)
+            .find(([, e]) => e.agent_role === roleForDest);
+          if (injected) {
+            srcPath = path.join(taskDir, `${injected[0]}-output.md`);
+          }
+        }
+      }
+
       try {
         const content = await fs.readFile(srcPath);
         zipEntries[dest] = new Uint8Array(content);
