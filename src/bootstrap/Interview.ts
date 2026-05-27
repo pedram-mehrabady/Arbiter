@@ -75,10 +75,19 @@ export async function runInterview(detected: ProjectProfile): Promise<InterviewA
 
   // 3. Stack (pre-filled from detection)
   console.log('\nStack (press enter to confirm detected values):');
-  const stackFrontend = await ask('Frontend framework', detected.stackFrontend !== 'none' ? detected.stackFrontend : 'none');
-  const stackBackend  = await ask('Backend framework',  detected.stackBackend  !== 'none' ? detected.stackBackend  : 'none');
-  const stackDatabase = await ask('Database',           detected.stackDatabase !== 'none' ? detected.stackDatabase : 'none');
-  const testFramework = await ask('Test framework',     detected.testFramework !== 'none' ? detected.testFramework : 'none');
+
+  console.log('  Frontend: 1) react  2) next  3) vue  4) angular  5) svelte  6) none');
+  const frontendRaw = await ask('Frontend framework', detected.stackFrontend !== 'none' ? detected.stackFrontend : 'none');
+  const FRONTEND_MAP: Record<string, string> = { '1': 'react', '2': 'next', '3': 'vue', '4': 'angular', '5': 'svelte', '6': 'none' };
+  const stackFrontend = FRONTEND_MAP[frontendRaw] ?? frontendRaw;
+
+  console.log('  Backend:  1) node  2) dotnet  3) python  4) go  5) java  6) none');
+  const backendRaw = await ask('Backend framework', detected.stackBackend !== 'none' ? detected.stackBackend : 'none');
+  const BACKEND_MAP: Record<string, string> = { '1': 'node', '2': 'dotnet', '3': 'python', '4': 'go', '5': 'java', '6': 'none' };
+  const stackBackend = BACKEND_MAP[backendRaw] ?? backendRaw;
+
+  const stackDatabase = await ask('Database',       detected.stackDatabase !== 'none' ? detected.stackDatabase : 'none');
+  const testFramework = await ask('Test framework', detected.testFramework  !== 'none' ? detected.testFramework : 'none');
 
   // 4. Design system
   console.log('\nDesign system / component library (e.g. "Tailwind + shadcn/ui", "Material UI", or "none"):');
