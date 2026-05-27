@@ -43,12 +43,17 @@ export type {
 } from './types/index';
 
 export { TaskInitializer } from './task/TaskInitializer';
+export { DebuggerGuard } from './conductor/DebuggerGuard';
+export { EvidenceCache, parseBlastRadius } from './evidence/EvidenceCache';
 export { PlanValidator, formatPlanScore } from './plan/PlanValidator';
 export { DECOMPOSABLE_ROLES, GENERIC_IMPL_IDS, FIXED_PIPELINE_IDS } from './plan/PlanOutput';
 export { BundleAssembler } from './bundle/BundleAssembler';
 export { BundleManifestBuilder, ALC_ARTIFACT_MAP, ALC_CONTROLS } from './bundle/BundleManifest';
 export { GitCommitReader } from './bundle/GitCommitReader';
 
+export type { PreflightVerdict } from './preflight/PreflightCheck';
+export type { DebuggerDiff, DebuggerGuardResult } from './conductor/DebuggerGuard';
+export type { CachedDesign, CacheCheckResult } from './evidence/EvidenceCache';
 export type { LLMProvider } from './providers/LLMProvider';
 export type { GateType, GateSpec } from './gates/GateRegistry';
 export type { InitOptions, InitResult } from './task/TaskInitializer';

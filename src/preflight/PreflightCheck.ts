@@ -14,8 +14,16 @@ const CRYPTO_VIOLATIONS: Array<{ name: string; pattern: RegExp }> = [
   { name: 'custom_pbkdf', pattern: /class\s+\w*Pbkdf(?!.*Rfc2898)/gi },
 ];
 
+// Verdict drives conductor routing after preflight:
+//   spawn  — all checks passed, proceed to agent invocation
+//   reject — infrastructure problem (missing files); fix context, retry without strike
+//   split  — complexity cap exceeded; task must be decomposed before retry
+//   halt   — hard violation (P-crypto, secrets); pipeline stops, human must intervene
+export type PreflightVerdict = 'spawn' | 'reject' | 'split' | 'halt';
+
 export interface PreflightResult {
   passed: boolean;
+  verdict: PreflightVerdict;
   checks: Array<{ name: string; passed: boolean; detail?: string }>;
   contextHash: string;
 }
@@ -87,10 +95,21 @@ export class PreflightCheck {
     });
 
     const passed = checks.every(c => c.passed);
+    const verdict = passed ? 'spawn' : this.deriveVerdict(checks);
     return {
       ok: true,
-      value: { passed, checks, contextHash },
+      value: { passed, verdict, checks, contextHash },
     };
+  }
+
+  private deriveVerdict(checks: PreflightResult['checks']): PreflightVerdict {
+    const failed = checks.filter(c => !c.passed).map(c => c.name);
+    // Hard stops — irreversible violations that require human review
+    if (failed.includes('p_crypto_rule') || failed.includes('secrets_scan')) return 'halt';
+    // Complexity overload — task must be decomposed, not retried
+    if (failed.includes('complexity_score')) return 'split';
+    // Infrastructure failure — fix context, no strike consumed
+    return 'reject';
   }
 
   private async hashContextFiles(files: string[]): Promise<string> {

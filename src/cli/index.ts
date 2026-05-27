@@ -10,6 +10,10 @@ import { TaskQueue } from '../queue/TaskQueue';
 import { StateStore } from '../state/StateStore';
 import { TaskInitializer } from '../task/TaskInitializer';
 import { BundleAssembler } from '../bundle/BundleAssembler';
+import { PreflightCheck } from '../preflight/PreflightCheck';
+import { ContextAssembler } from '../context/ContextAssembler';
+import { ContextPruner } from '../context/ContextPruner';
+import { EvidenceCache } from '../evidence/EvidenceCache';
 
 const program = new Command();
 
@@ -353,6 +357,84 @@ bundleCmd
     } else {
       result.value.forEach(b => console.log(`  ${b}`));
     }
+  });
+
+// ─── arbiter preflight ────────────────────────────────────────────────────────
+
+const preflightCmd = program.command('preflight').description('Pre-flight validation commands');
+
+preflightCmd
+  .command('check <task-id>')
+  .description('Run pre-flight checks against eligible sub-tasks without spawning agents')
+  .option('--workspace <path>', 'Workspace root', process.cwd())
+  .action(async (taskId: string, opts: Record<string, string>) => {
+    const root = path.resolve(opts['workspace']);
+    const taskDir = path.join(root, '.arbiter', 'tasks', taskId);
+    const store = new StateStore(root);
+    const stateResult = await store.read();
+    if (!stateResult.ok) { console.error(stateResult.error); process.exit(1); }
+
+    const state = stateResult.value;
+    if (state.task_id !== taskId) {
+      console.error(`State is for task "${state.task_id}", not "${taskId}"`);
+      process.exit(1);
+    }
+
+    const contextAssembler = new ContextAssembler(root);
+    const contextPruner = new ContextPruner();
+    const preflight = new PreflightCheck();
+
+    const eligible = Object.entries(state.sub_tasks).filter(([, e]) => e.status === 'pending');
+    if (eligible.length === 0) {
+      console.log('No pending sub-tasks to check.');
+      return;
+    }
+
+    let anyFailed = false;
+    for (const [subTaskId, entry] of eligible) {
+      const ctxResult = await contextAssembler.assemble(entry.agent_role, taskDir, '', '');
+      if (!ctxResult.ok) {
+        console.error(`  [ERROR] ${subTaskId}: context assembly failed — ${ctxResult.error}`);
+        anyFailed = true;
+        continue;
+      }
+      const ctx = contextPruner.prune(ctxResult.value);
+      if (!ctx.ok) { console.error(`  [ERROR] ${subTaskId}: context prune failed`); anyFailed = true; continue; }
+
+      const result = await preflight.run(subTaskId, entry.agent_role, ctx.value.filesIncluded, state.complexity_score);
+      if (!result.ok) {
+        console.error(`  [ERROR] ${subTaskId}: ${result.error}`);
+        anyFailed = true;
+        continue;
+      }
+
+      const { passed, verdict, contextHash } = result.value;
+      const icon = passed ? '✓' : '✗';
+      console.log(`  ${icon} ${subTaskId.padEnd(20)} [${verdict}]  hash=${contextHash.slice(0, 20)}...`);
+      if (!passed) {
+        console.log(preflight.formatFailures(result.value));
+        anyFailed = true;
+      }
+    }
+
+    if (anyFailed) process.exit(1);
+  });
+
+// ─── arbiter cache ────────────────────────────────────────────────────────────
+
+const cacheCmd = program.command('cache').description('Evidence cache management');
+
+cacheCmd
+  .command('invalidate')
+  .description('Invalidate evidence cache entries (optionally filtered by module)')
+  .option('--module <pattern>', 'Invalidate only entries matching this module pattern')
+  .option('--workspace <path>', 'Workspace root', process.cwd())
+  .action(async (opts: Record<string, string>) => {
+    const root = path.resolve(opts['workspace']);
+    const cache = new EvidenceCache(root);
+    const result = await cache.invalidate(opts['module']);
+    if (!result.ok) { console.error(result.error); process.exit(1); }
+    console.log(`Invalidated ${result.value} evidence cache entry/entries.`);
   });
 
 program.parseAsync(process.argv).catch(err => {
