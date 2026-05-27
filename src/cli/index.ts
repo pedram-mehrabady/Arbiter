@@ -304,6 +304,48 @@ taskCmd
   });
 
 taskCmd
+  .command('list')
+  .description('List all tasks initialised in this workspace')
+  .option('--workspace <path>', 'Workspace root', process.cwd())
+  .action(async (opts: Record<string, string>) => {
+    const root = path.resolve(opts['workspace']);
+    const fs = await import('node:fs/promises');
+    const tasksDir = path.join(root, '.arbiter', 'tasks');
+    let entries: string[];
+    try {
+      const dirents = await fs.readdir(tasksDir, { withFileTypes: true });
+      entries = dirents.filter(d => d.isDirectory()).map(d => d.name);
+    } catch {
+      console.log('No tasks found (workspace not initialised or no tasks created yet).');
+      return;
+    }
+    if (entries.length === 0) { console.log('No tasks found.'); return; }
+    entries.forEach(name => console.log(`  ${name}`));
+  });
+
+taskCmd
+  .command('show <task-id>')
+  .description('Show pipeline status for a specific task')
+  .option('--workspace <path>', 'Workspace root', process.cwd())
+  .action(async (taskId: string, opts: Record<string, string>) => {
+    const root = path.resolve(opts['workspace']);
+    const store = new StateStore(root);
+    const stateResult = await store.read();
+    if (!stateResult.ok) { console.error(stateResult.error); process.exit(1); }
+
+    const { task_id, phase_status, sub_tasks } = stateResult.value;
+    if (task_id !== taskId) {
+      console.error(`State is for task "${task_id}", not "${taskId}". Use \`arbiter status\` to see the current active task.`);
+      process.exit(1);
+    }
+    console.log(`Task: ${task_id}  Status: ${phase_status}`);
+    for (const [id, entry] of Object.entries(sub_tasks)) {
+      const strike = entry.strike ? ` (strike ${entry.strike})` : '';
+      console.log(`  ${entry.status.padEnd(12)} ${entry.agent_role.padEnd(16)} ${id}${strike}`);
+    }
+  });
+
+taskCmd
   .command('reset <task-id>')
   .description('Reset all sub-tasks to pending (keeps state.json, clears progress)')
   .option('--workspace <path>', 'Workspace root', process.cwd())
