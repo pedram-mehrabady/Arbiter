@@ -43,6 +43,8 @@ export type {
 } from './types/index';
 
 export { TaskInitializer } from './task/TaskInitializer';
+export { PlanValidator, formatPlanScore } from './plan/PlanValidator';
+export { DECOMPOSABLE_ROLES, GENERIC_IMPL_IDS, FIXED_PIPELINE_IDS } from './plan/PlanOutput';
 export { BundleAssembler } from './bundle/BundleAssembler';
 export { BundleManifestBuilder, ALC_ARTIFACT_MAP, ALC_CONTROLS } from './bundle/BundleManifest';
 export { GitCommitReader } from './bundle/GitCommitReader';
