@@ -17,7 +17,7 @@ import { EvidenceCache } from '../evidence/EvidenceCache';
 import { scanProject, formatProfile } from '../bootstrap/Scanner';
 import { runInterview, buildDefaultAnswers } from '../bootstrap/Interview';
 import { generateConfig } from '../bootstrap/ConfigGenerator';
-import { registerProject } from '../bootstrap/ProjectRegistry';
+import { registerProject, listProjects } from '../bootstrap/ProjectRegistry';
 
 const program = new Command();
 
@@ -33,6 +33,15 @@ program
   .description('Set up Arbiter in this project — scans your repo and generates arbiter.config.json')
   .option('--workspace <path>', 'Workspace root (default: cwd)', process.cwd())
   .option('--non-interactive', 'Accept all detected defaults — no prompts (useful for CI)', false)
+  .option('--provider <type>', 'Provider: claude (default), sdk, ollama')
+  .option('--audience <type>', 'Audience: public (default), internal, regulated')
+  .option('--frontend <framework>', 'Frontend framework (overrides detected value)')
+  .option('--backend <framework>', 'Backend framework (overrides detected value)')
+  .option('--database <db>', 'Database (overrides detected value)')
+  .option('--test-framework <fw>', 'Test framework (overrides detected value)')
+  .option('--no-gate-design', 'Disable design gate')
+  .option('--no-gate-plan', 'Disable plan gate')
+  .option('--no-gate-review', 'Disable review gate')
   .action(async (opts: Record<string, string | boolean>) => {
     const workspaceRoot = path.resolve(opts['workspace'] as string);
     const nonInteractive = Boolean(opts['non-interactive']);
@@ -40,11 +49,31 @@ program
     console.log(`\nArbiter init — scanning ${workspaceRoot}...\n`);
 
     const profile = await scanProject(workspaceRoot);
+
+    // Apply CLI flag overrides to detected profile before interview/defaults
+    if (opts['frontend'])      profile.stackFrontend = opts['frontend'] as string;
+    if (opts['backend'])       profile.stackBackend  = opts['backend']  as string;
+    if (opts['database'])      profile.stackDatabase = opts['database'] as string;
+    if (opts['test-framework']) profile.testFramework = opts['test-framework'] as string;
+
     console.log(formatProfile(profile));
 
-    const answers = nonInteractive
+    let answers = nonInteractive
       ? (console.log('Non-interactive mode — using detected defaults.\n'), buildDefaultAnswers(profile))
       : await runInterview(profile);
+
+    // Apply remaining CLI flag overrides on top of interview answers
+    if (opts['provider']) {
+      const p = opts['provider'] as string;
+      answers.provider = p === 'sdk' ? 'anthropic_sdk' : p === 'ollama' ? 'ollama' : 'claude_max_cli';
+    }
+    if (opts['audience']) {
+      const a = opts['audience'] as string;
+      answers.audience = a === 'regulated' ? 'regulated' : a === 'internal' ? 'internal' : 'public';
+    }
+    if (opts['gate-design']  === false) answers.gates.design  = false;
+    if (opts['gate-plan']    === false) answers.gates.plan    = false;
+    if (opts['gate-review']  === false) answers.gates.review  = false;
 
     const configResult = await generateConfig(workspaceRoot, answers);
     if (!configResult.ok) {
@@ -88,6 +117,11 @@ program
       console.error(`\nError: ${result.error}`);
       process.exit(1);
     }
+    const { subTasksCompleted, totalCostUsd, elapsedMs } = result.value;
+    const elapsed = elapsedMs < 60_000
+      ? `${(elapsedMs / 1000).toFixed(1)}s`
+      : `${Math.floor(elapsedMs / 60_000)}m ${Math.round((elapsedMs % 60_000) / 1000)}s`;
+    console.log(`\n  Sub-tasks: ${subTasksCompleted}  |  Cost: $${totalCostUsd.toFixed(4)}  |  Time: ${elapsed}`);
   });
 
 // ─── arbiter gate ─────────────────────────────────────────────────────────────
@@ -293,7 +327,14 @@ taskCmd
         completed_at: undefined,
       });
     }
+
+    // Clear stale gate entries so they don't block the next run
+    const gatePoller = new GatePoller(root, new DecisionLog(root));
+    const clearedResult = await gatePoller.clearTask(taskId);
+    const clearedCount = clearedResult.ok ? clearedResult.value : 0;
+
     console.log(`Task ${taskId}: all ${Object.keys(state.sub_tasks).length} sub-tasks reset to pending.`);
+    if (clearedCount > 0) console.log(`Cleared ${clearedCount} stale gate entry/entries.`);
   });
 
 // ─── arbiter queue ────────────────────────────────────────────────────────────
@@ -311,6 +352,30 @@ queueCmd
     if (!result.ok) { console.error(result.error); process.exit(1); }
     if (result.value.length === 0) { console.log('Queue empty.'); return; }
     result.value.forEach(t => console.log(`  [${t.priority}] ${t.task_id}  ${t.queued_at}`));
+  });
+
+// ─── arbiter projects ─────────────────────────────────────────────────────────
+
+const projectsCmd = program.command('projects').description('Registered project management');
+
+projectsCmd
+  .command('list')
+  .description('List all projects registered with Arbiter (~/.arbiter/projects.json)')
+  .action(async () => {
+    const result = await listProjects();
+    if (!result.ok) { console.error(result.error); process.exit(1); }
+    const { projects, active } = result.value;
+    if (projects.length === 0) {
+      console.log('No projects registered. Run `arbiter init` inside a project directory.');
+      return;
+    }
+    projects.forEach(p => {
+      const marker = p.id === active ? ' (active)' : '';
+      console.log(`  ${p.id}${marker}`);
+      console.log(`    Name: ${p.name}`);
+      console.log(`    Root: ${p.root}`);
+      console.log(`    Last accessed: ${p.last_accessed}`);
+    });
   });
 
 // ─── arbiter bundle ───────────────────────────────────────────────────────────

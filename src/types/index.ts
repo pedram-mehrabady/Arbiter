@@ -169,6 +169,7 @@ export interface FactoryConfig {
   providers: Record<string, ProviderConfig>;
   gates?: GatesConfig;
   template_vars?: TemplateVarsConfig;
+  complexity_cap?: number;
 }
 
 // ─── Blast radius ─────────────────────────────────────────────────────────────
@@ -229,6 +230,14 @@ export interface AssembledContext {
 }
 
 // ─── Conductor options ────────────────────────────────────────────────────────
+
+export interface ConductSummary {
+  taskId: string;
+  subTasksCompleted: number;
+  totalCostUsd: number;
+  elapsedMs: number;
+  bundlePath?: string;
+}
 
 export interface ConductOptions {
   resume: boolean;

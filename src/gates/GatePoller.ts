@@ -87,6 +87,18 @@ export class GatePoller {
     return { ok: true, value: gate };
   }
 
+  // Remove all gate entries (pending or resolved) belonging to a task.
+  // Used by `arbiter task reset` so stale gates don't block the next run.
+  async clearTask(taskId: string): Promise<ServiceResult<number>> {
+    const allResult = await this.readAll();
+    if (!allResult.ok) return allResult;
+    const before = allResult.value.length;
+    const filtered = allResult.value.filter(g => g.task_id !== taskId);
+    const writeResult = await this.writeAll(filtered);
+    if (!writeResult.ok) return writeResult;
+    return { ok: true, value: before - filtered.length };
+  }
+
   async listPending(taskId?: string): Promise<ServiceResult<GateDefinition[]>> {
     const allResult = await this.readAll();
     if (!allResult.ok) return allResult;
@@ -136,7 +148,7 @@ export class GatePoller {
   private async writeAll(gates: GateDefinition[]): Promise<ServiceResult<void>> {
     try {
       await fs.mkdir(path.dirname(this.gatesPath), { recursive: true });
-      const tmp = `${this.gatesPath}.tmp.${process.pid}`;
+      const tmp = `${this.gatesPath}.tmp.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}`;
       await fs.writeFile(tmp, JSON.stringify(gates, null, 2), 'utf-8');
       await fs.rename(tmp, this.gatesPath);
       return { ok: true, value: undefined };

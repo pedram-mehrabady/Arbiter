@@ -18,6 +18,8 @@ export { ContextPruner } from './context/ContextPruner';
 export { AnthropicProvider } from './providers/AnthropicProvider';
 export { AnthropicSdkProvider } from './providers/AnthropicSdkProvider';
 export { OllamaProvider } from './providers/OllamaProvider';
+// MockProvider is intentionally NOT exported — it is test-only.
+// Import directly: import { MockProvider } from '@arbiter-pipeline/cli/dist/providers/MockProvider'
 export { estimateCost, estimateTokenCount, MODEL_COSTS } from './providers/LLMProvider';
 
 export type {
@@ -45,6 +47,7 @@ export type {
   UsageLedgerEntry,
   AssembledContext,
   ConductOptions,
+  ConductSummary,
 } from './types/index';
 
 export { TaskInitializer } from './task/TaskInitializer';

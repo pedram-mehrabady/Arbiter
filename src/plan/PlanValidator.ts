@@ -27,7 +27,11 @@ const SCORE_MISMATCH_WARN_THRESHOLD = 1;
 const JSON_FENCE_RE = /```(?:json)?\s*\n([\s\S]*?)\n```/;
 
 export class PlanValidator {
-  private readonly scorer = new ComplexityScorer();
+  private readonly scorer: ComplexityScorer;
+
+  constructor(complexityCap?: number) {
+    this.scorer = new ComplexityScorer(complexityCap);
+  }
 
   // ── Public API ────────────────────────────────────────────────────────────
 

@@ -6,9 +6,15 @@ const TIER_THRESHOLDS: Record<ComplexityTier, [number, number]> = {
   3: [10, Infinity],
 };
 
-const MAX_ALLOWED_SCORE = 9;
+const DEFAULT_MAX_SCORE = 9;
 
 export class ComplexityScorer {
+  private readonly maxScore: number;
+
+  constructor(maxScore = DEFAULT_MAX_SCORE) {
+    this.maxScore = maxScore;
+  }
+
   score(inputs: ComplexityInputs): ComplexityScore {
     const weighted_total =
       inputs.file_count +
@@ -23,11 +29,11 @@ export class ComplexityScorer {
   }
 
   validate(score: ComplexityScore): ServiceResult<void> {
-    if (score.weighted_total > MAX_ALLOWED_SCORE) {
+    if (score.weighted_total > this.maxScore) {
       return {
         ok: false,
         error: [
-          `Complexity score ${score.weighted_total} exceeds maximum (${MAX_ALLOWED_SCORE}).`,
+          `Complexity score ${score.weighted_total} exceeds maximum (${this.maxScore}).`,
           `Tier ${score.tier} task must be split before spawning agents.`,
           `Breakdown: files=${score.file_count}, deps=${score.new_dependency_count},`,
           `  crypto/validation=${score.crypto_or_validation_logic}×2,`,

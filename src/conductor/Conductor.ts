@@ -6,6 +6,7 @@ import {
   SubTaskEntry,
   FailureClass,
   ConductOptions,
+  ConductSummary,
   ServiceResult,
   AgentRole,
   FactoryConfig,
@@ -54,7 +55,7 @@ export class Conductor {
   private readonly contextAssembler: ContextAssembler;
   private readonly contextPruner = new ContextPruner();
   private readonly bundleAssembler: BundleAssembler;
-  private readonly planValidator = new PlanValidator();
+  private planValidator = new PlanValidator();
   private readonly debuggerGuard = new DebuggerGuard();
   private readonly evidenceCache: EvidenceCache;
   private provider: LLMProvider;
@@ -76,7 +77,8 @@ export class Conductor {
     this.provider = (options.provider as LLMProvider | undefined) ?? new AnthropicProvider();
   }
 
-  async conduct(taskId: string): Promise<ServiceResult<void>> {
+  async conduct(taskId: string): Promise<ServiceResult<ConductSummary>> {
+    const startMs = Date.now();
     const configResult = await this.loadConfig();
     if (!configResult.ok) return configResult;
 
@@ -123,7 +125,26 @@ export class Conductor {
       detail: `maxParallel=${this.options.maxParallel} shadow=${this.options.shadow}`,
     });
 
-    return this.runLoop(state);
+    const loopResult = await this.runLoop(state);
+    if (!loopResult.ok) return loopResult;
+
+    const elapsedMs = Date.now() - startMs;
+    const totalCostUsd = await this.rateLimiter.getTodayTotal();
+    const finalState = await this.stateStore.read();
+    const subTasksCompleted = finalState.ok
+      ? Object.values(finalState.value.sub_tasks).filter(e => e.status === 'completed').length
+      : 0;
+
+    return {
+      ok: true,
+      value: {
+        taskId,
+        subTasksCompleted,
+        totalCostUsd,
+        elapsedMs,
+        bundlePath: loopResult.value?.bundlePath,
+      },
+    };
   }
 
   // P0-1: On resume, reset interrupted sub-tasks and verify completed ones.
@@ -207,7 +228,7 @@ export class Conductor {
     return true;
   }
 
-  private async runLoop(state: TaskState): Promise<ServiceResult<void>> {
+  private async runLoop(state: TaskState): Promise<ServiceResult<{ bundlePath?: string }>> {
     const taskId = state.task_id;
 
     while (true) {
@@ -224,12 +245,14 @@ export class Conductor {
         });
         console.log(`\n✓ Task ${taskId} complete. Assembling audit evidence bundle...`);
 
+        let bundlePath: string | undefined;
         const bundleResult = await this.bundleAssembler.assemble(taskId, state);
         if (!bundleResult.ok) {
           console.warn(`  ⚠ Bundle assembly failed: ${bundleResult.error}`);
           console.warn(`    Run 'arbiter bundle create ${taskId}' to retry.`);
         } else {
           const { zipPath, bundleId, presentArtifacts, missingArtifacts } = bundleResult.value;
+          bundlePath = zipPath;
           console.log(`  ✓ Bundle: ${zipPath}`);
           console.log(`    ID: ${bundleId}`);
           console.log(`    ALC artifacts: ${presentArtifacts.length} present`);
@@ -238,7 +261,7 @@ export class Conductor {
           }
         }
 
-        return { ok: true, value: undefined };
+        return { ok: true, value: { bundlePath } };
       }
 
       if (TaskQueue.hasFailed(state)) {
@@ -313,7 +336,7 @@ export class Conductor {
       ));
     }
 
-    return { ok: true, value: undefined };
+    return { ok: true, value: {} };
   }
 
   private async runSubTask(
@@ -947,6 +970,11 @@ export class Conductor {
       try {
         const content = await fs.readFile(loc, 'utf-8');
         this.config = JSON.parse(content) as FactoryConfig;
+
+        // Apply complexity cap from config
+        if (this.config.complexity_cap !== undefined) {
+          this.planValidator = new PlanValidator(this.config.complexity_cap);
+        }
 
         // Only configure provider from config if none was injected
         if (!this.options.provider) {
