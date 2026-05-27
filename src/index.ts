@@ -15,6 +15,8 @@ export { TaskQueue } from './queue/TaskQueue';
 export { ContextAssembler } from './context/ContextAssembler';
 export { ContextPruner } from './context/ContextPruner';
 export { AnthropicProvider } from './providers/AnthropicProvider';
+export { AnthropicSdkProvider } from './providers/AnthropicSdkProvider';
+export { OllamaProvider } from './providers/OllamaProvider';
 export { estimateCost, estimateTokenCount, MODEL_COSTS } from './providers/LLMProvider';
 
 export type {

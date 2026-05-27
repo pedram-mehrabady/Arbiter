@@ -35,6 +35,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.99.0",
     "commander": "^12.1.0",
     "fflate": "^0.8.3"
   },

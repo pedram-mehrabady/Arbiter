@@ -17,6 +17,8 @@ import { FailureClassifier } from '../classifiers/FailureClassifier';
 import { PreflightCheck } from '../preflight/PreflightCheck';
 import { LLMProvider } from '../providers/LLMProvider';
 import { AnthropicProvider } from '../providers/AnthropicProvider';
+import { AnthropicSdkProvider } from '../providers/AnthropicSdkProvider';
+import { OllamaProvider } from '../providers/OllamaProvider';
 import { BuildReceiptStore } from '../receipts/BuildReceipt';
 import { GatePoller } from '../gates/GatePoller';
 import { GateRegistry } from '../gates/GateRegistry';
@@ -948,8 +950,15 @@ export class Conductor {
 
         // Only configure provider from config if none was injected
         if (!this.options.provider) {
-          const providerConfig = Object.values(this.config.providers)[0];
-          if (providerConfig?.cmd) {
+          const [providerName, providerConfig] = Object.entries(this.config.providers)[0] ?? [];
+          if (providerName === 'anthropic_sdk') {
+            const apiKey = providerConfig?.api_key
+              ?? (providerConfig?.api_key_env ? process.env[providerConfig.api_key_env as string] : undefined)
+              ?? process.env.ANTHROPIC_API_KEY;
+            this.provider = new AnthropicSdkProvider({ apiKey });
+          } else if (providerName === 'ollama') {
+            this.provider = new OllamaProvider({ baseUrl: providerConfig?.base_url });
+          } else if (providerConfig?.cmd) {
             this.provider = new AnthropicProvider({
               cmd: providerConfig.cmd,
               headlessFlag: providerConfig.headless_flag ?? '-p',
