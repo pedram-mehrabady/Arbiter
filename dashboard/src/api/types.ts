@@ -3,7 +3,7 @@ export type AgentKey = 'reframe' | 'question' | 'research' | 'design' | 'design-
 export type OsType = 'mac' | 'win';
 export type TabKey = 'arbiter' | 'flowmap' | 'graph' | 'traces' | 'mcp';
 
-// exec-plan board projection (.arbiter/board.json, written by scripts/write-board.sh)
+// exec-plan board projection (arbiter/board.json, written by scripts/write-board.sh)
 export interface BoardItem { id: string; title: string; archetype: string; }
 export interface BoardData {
   generated: string;
@@ -189,7 +189,7 @@ export interface ArbiterConfig {
 
 export const DEFAULT_ARBITER_CONFIG: ArbiterConfig = {
   project: 'foederata',
-  arbiter_dir: '.arbiter',
+  arbiter_dir: 'arbiter',
   exec_plan_dir: 'compliance/exec-plan',
   factory_config_path: 'compliance/automation/factory-config.json',
   agents_config_path: 'compliance/automation/agents.config.json',
@@ -248,7 +248,7 @@ export interface PlanAnalysis {
   estimated_stages?: Record<string, string>;
 }
 
-// ── Plans backlog (dashboard-owned, persisted locally + mirrored to .arbiter/plans/*.md) ──
+// ── Plans backlog (dashboard-owned, persisted locally + mirrored to arbiter/plans/*.md) ──
 export type PlanStatus = 'draft' | 'ready';
 export type PlanType = 'feature' | 'bug' | 'refactor' | 'chore';
 
@@ -267,7 +267,7 @@ export interface PlanItem {
   created_at: string;
 }
 
-// Two-way chat log between the dashboard (Pedram) and the CLIs (.arbiter/messages.json)
+// Two-way chat log between the dashboard (Pedram) and the CLIs (arbiter/messages.json)
 export interface CliMessage {
   from: string;    // 'pedram' for the user, or an agent key: 'babysitter' | 'front' | 'backend' | 'push'
   to?: string;     // target agent key when from === 'pedram'
@@ -276,7 +276,7 @@ export interface CliMessage {
   ts: string;
 }
 
-// Coordinator babysitter → dashboard: "open this CLI for me" (.arbiter/launch-requests/{agent}.json)
+// Coordinator babysitter → dashboard: "open this CLI for me" (arbiter/launch-requests/{agent}.json)
 export interface LaunchRequest {
   agent: string;     // babysitter | front | backend | push | review
   ticket?: string;
@@ -334,3 +334,29 @@ export const DEFAULT_WIDGET_ORDER: WidgetId[] = [
   'active-jobs', 'improvements',
   'done-jobs',
 ];
+
+// ─── Iron Funnel Dashboard Types ──────────────────────────────────────────────
+
+export interface TaskTier {
+  tier: 1 | 2 | 3;
+  profile: string;
+}
+
+export interface IronFunnelGateStatus {
+  gate: 1 | 2 | 3 | 4 | 5;
+  name: string;
+  type: 'deterministic' | 'llm';
+  status: 'pending' | 'running' | 'passed' | 'failed' | 'skipped';
+  elapsed_ms?: number;
+  error_count?: number;
+}
+
+export interface IronFunnelStatus {
+  gates: IronFunnelGateStatus[];
+  overall: 'pending' | 'running' | 'passed' | 'failed';
+}
+
+export type CriticalPathFlag = {
+  isCriticalPath: boolean;
+  blockingCount: number;
+};

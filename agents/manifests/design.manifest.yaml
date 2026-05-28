@@ -1,0 +1,12 @@
+agent: design
+always:
+  - agents/templates/design.md
+  - engine/MASTER-DIRECTIVES.md
+  - 2-research.md
+  - 0-reframe.md
+  - agents/knowledge/design-system.md
+  - agents/knowledge/security.md
+  - MODULE_ARCHITECTURE.md
+on_demand:
+  - {{WORKSPACE_BE}}/CQRS_API_DESIGN.md
+  - {{DOMAIN_SPEC_DIR}}/*

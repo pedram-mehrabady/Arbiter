@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { TaskState, ServiceResult } from '../types/index';
 
-const ARCHIVE_DIR = path.join('.arbiter', 'archive');
+const ARCHIVE_DIR = path.join('arbiter', 'archive');
 
 export interface ArchivedTaskMeta {
   task_id: string;
@@ -21,7 +21,7 @@ export class TaskArchiver {
   }
 
   private taskStatePath(taskId: string): string {
-    return path.join(this.workspaceRoot, '.arbiter', 'tasks', taskId, 'state.json');
+    return path.join(this.workspaceRoot, 'arbiter', 'tasks', taskId, 'state.json');
   }
 
   // Snapshot active per-task state → archive/<task_id>.json and remove state.json from task dir.

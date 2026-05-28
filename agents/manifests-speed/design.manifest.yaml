@@ -1,0 +1,18 @@
+agent: design
+pipeline: speed
+always:
+  - agents/templates-speed/design.md
+  - engine/MASTER-DIRECTIVES.md
+  - task-input.md
+  - agents/knowledge/product-sense.md
+  - agents/knowledge/design-system.md
+  - agents/knowledge/security.md
+  - "{{MODULE_ARCHITECTURE_DOC}}"
+  - "{{WORKSPACE_FE_CLAUDE}}"
+  - "{{WORKSPACE_BE_CLAUDE}}"
+on_demand:
+  - "{{DOMAIN_SPEC_DIR}}/*"
+  - exec-plan/02-incubating/
+never:
+  - agents/templates/
+  - agents/manifests/

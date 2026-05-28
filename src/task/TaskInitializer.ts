@@ -35,6 +35,8 @@ const FAST_PIPELINE: PipelineStep[] = [
 const PIPELINES: Record<PipelineName, PipelineStep[]> = {
   standard: STANDARD_PIPELINE,
   fast:     FAST_PIPELINE,
+  full:     STANDARD_PIPELINE,
+  speed:    FAST_PIPELINE,
 };
 
 export interface InitOptions {
@@ -86,7 +88,7 @@ export class TaskInitializer {
     }
 
     // Create task directory and write task.md
-    const taskDir = path.join(opts.workspaceRoot, '.arbiter', 'tasks', opts.taskId);
+    const taskDir = path.join(opts.workspaceRoot, 'arbiter', 'tasks', opts.taskId);
     try {
       await fs.mkdir(taskDir, { recursive: true });
       await fs.writeFile(path.join(taskDir, 'task.md'), specContent, 'utf-8');

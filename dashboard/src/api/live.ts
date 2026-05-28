@@ -2,7 +2,7 @@ import type { ArbiterState, CliStats, AgentData, ImprovementItem, PlanOrderReque
 
 export class LiveApi {
   constructor(
-    private dir: FileSystemDirectoryHandle,       // .arbiter/ subdirectory
+    private dir: FileSystemDirectoryHandle,       // arbiter/ subdirectory
     private rootDir?: FileSystemDirectoryHandle,  // repo root (needed for compliance/ + factory-config)
   ) {}
 
@@ -70,7 +70,7 @@ export class LiveApi {
     return result;
   }
 
-  // ── Plan files in .arbiter/plans/ ──────────────────────────────────────────
+  // ── Plan files in arbiter/plans/ ──────────────────────────────────────────
 
   async readPlanFile(ticket: string): Promise<string | null> {
     const filename = `${ticket.replace(/[^a-zA-Z0-9-_]/g, '')}.md`;
@@ -138,7 +138,7 @@ export class LiveApi {
     await w.close();
   }
 
-  /** Append taskId to .arbiter/queue-order.json so factory.sh picks it up */
+  /** Append taskId to arbiter/queue-order.json so factory.sh picks it up */
   async enqueueTask(taskId: string): Promise<void> {
     let order: string[] = [];
     try {
@@ -315,7 +315,7 @@ export class LiveApi {
     await w.close();
   }
 
-  /** Write .arbiter/gate-approvals/<taskId>-<gate>.json to unblock factory.sh */
+  /** Write arbiter/gate-approvals/<taskId>-<gate>.json to unblock factory.sh */
   async writeGateApproval(taskId: string, gate: GateName, decision: 'approved' | 'rejected'): Promise<void> {
     const approvalsDir = await this.dir.getDirectoryHandle('gate-approvals', { create: true });
     const fh = await approvalsDir.getFileHandle(`${taskId}-${gate}.json`, { create: true });
@@ -347,19 +347,19 @@ export async function connectRepo(): Promise<ConnectResult> {
     return { ok: false, reason: `Could not open the folder picker: ${(e as Error).message}` };
   }
 
-  if (picked.name === '.arbiter') {
-    // User picked .arbiter directly — no root available
+  if (picked.name === 'arbiter') {
+    // User picked arbiter directly — no root available
     return { ok: true, arbiterHandle: picked, rootHandle: picked };
   }
 
   try {
-    const arbiter = await picked.getDirectoryHandle('.arbiter', { create: false });
+    const arbiter = await picked.getDirectoryHandle('arbiter', { create: false });
     return { ok: true, arbiterHandle: arbiter, rootHandle: picked };
   } catch (e) {
     if (e instanceof DOMException && e.name === 'NotFoundError') {
       return {
         ok: false,
-        reason: `No ".arbiter" folder inside "${picked.name}". Pick the repo root (run factory.sh once if it doesn't exist yet).`,
+        reason: `No "arbiter" folder inside "${picked.name}". Pick the repo root (run factory.sh once if it doesn't exist yet).`,
       };
     }
     return { ok: false, reason: `Could not read "${picked.name}": ${(e as Error).message}` };

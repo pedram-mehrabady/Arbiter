@@ -1,0 +1,9 @@
+agent: reframe
+always:
+  - agents/templates/reframe.md
+  - engine/MASTER-DIRECTIVES.md
+  - agents/knowledge/product-sense.md
+  - agents/knowledge/core-beliefs.md
+  - spec.md
+on_demand:
+  - {{DOMAIN_SPEC_DOC}}

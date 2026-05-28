@@ -46,8 +46,8 @@ describe('BuildReceiptStore', () => {
   it('ensureSigningKey generates key pair on first call', async () => {
     const r = await store.ensureSigningKey();
     expect(r.ok).toBe(true);
-    const keyPath = path.join(root, '.arbiter', 'signing-key.pem');
-    const pubPath = path.join(root, '.arbiter', 'signing-key-pub.pem');
+    const keyPath = path.join(root, 'arbiter', 'signing-key.pem');
+    const pubPath = path.join(root, 'arbiter', 'signing-key-pub.pem');
     await expect(fs.access(keyPath)).resolves.toBeUndefined();
     await expect(fs.access(pubPath)).resolves.toBeUndefined();
   });
@@ -104,7 +104,7 @@ describe('BuildReceiptStore', () => {
     const c = await store.create(baseInput());
     if (!c.ok) return;
 
-    const receiptsPath = path.join(root, '.arbiter', 'receipts.jsonl');
+    const receiptsPath = path.join(root, 'arbiter', 'receipts.jsonl');
     const content = await fs.readFile(receiptsPath, 'utf-8');
     const receipt = JSON.parse(content.trim());
     receipt.cost_usd = 999.99;

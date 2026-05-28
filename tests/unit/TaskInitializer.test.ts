@@ -26,7 +26,7 @@ describe('TaskInitializer', () => {
     const r = await initializer.init({ taskId: 'feat-1', specFile, workspaceRoot: root });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    const taskMd = path.join(root, '.arbiter', 'tasks', 'feat-1', 'task.md');
+    const taskMd = path.join(root, 'arbiter', 'tasks', 'feat-1', 'task.md');
     const content = await fs.readFile(taskMd, 'utf-8');
     expect(content).toContain('Add a button');
   });
@@ -36,9 +36,9 @@ describe('TaskInitializer', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.value.subTaskCount).toBe(11);
-    // Per-task state lives at .arbiter/tasks/<taskId>/state.json
+    // Per-task state lives at arbiter/tasks/<taskId>/state.json
     const stateRaw = await fs.readFile(
-      path.join(root, '.arbiter', 'tasks', 'feat-1', 'state.json'),
+      path.join(root, 'arbiter', 'tasks', 'feat-1', 'state.json'),
       'utf-8',
     );
     const state = JSON.parse(stateRaw);
@@ -69,7 +69,7 @@ describe('TaskInitializer', () => {
   it('allows multiple different tasks to coexist in the same workspace', async () => {
     await initializer.init({ taskId: 'feat-1', specFile, workspaceRoot: root });
     const r2 = await initializer.init({ taskId: 'feat-2', specFile, workspaceRoot: root });
-    // Per-task state isolation: each task has its own .arbiter/tasks/<id>/state.json
+    // Per-task state isolation: each task has its own arbiter/tasks/<id>/state.json
     expect(r2.ok).toBe(true);
     if (!r2.ok) return;
     expect(r2.value.taskId).toBe('feat-2');

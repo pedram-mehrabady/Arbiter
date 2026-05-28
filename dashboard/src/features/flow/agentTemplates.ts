@@ -100,7 +100,7 @@ Surfaces ambiguities and edge cases that would change design or scope; never ans
 ## Must do
 - Read 1-questions.md and answer every question with codebase evidence
 - Search sibling apps (costflow, contract-builder, drilling-run, debt-ledger) before proposing anything new
-- Consult .arbiter/registry.json for existing components, hooks, and services
+- Consult arbiter/registry.json for existing components, hooks, and services
 - Mark questions that remain genuinely unanswerable as "open" with an explanation
 - Prefer reuse over invention — cite the file path when an existing solution exists
 
@@ -122,7 +122,7 @@ Answers every open question from the question agent with codebase evidence; flag
 
 ## Inputs
 - 1-questions.md (open questions from question agent)
-- .arbiter/registry.json (component and service registry)
+- arbiter/registry.json (component and service registry)
 - MASTER-DIRECTIVES.md (project-wide constraints)
 
 ## Outputs
@@ -171,7 +171,7 @@ Defines what to build and produces the locked API/DB contract that frontend and 
 - CQRS_API_CHEATSHEET.md (query/command patterns)
 - design-system.md (UI component conventions)
 - security.md (security requirements)
-- .arbiter/db-schema-snapshot.md (current schema)
+- arbiter/db-schema-snapshot.md (current schema)
 
 ## Outputs
 - 3-design.md (11-section human spec)
@@ -240,7 +240,7 @@ Cross-model structural audit of the design output across AFTA security complianc
 - List every existing component, hook, service, and store the new feature must reuse (new → existing)
 - List every existing consumer that must be updated to integrate the new feature (existing → new)
 - Specify the transport pattern for each connection (props | zustand | event | API call | hook)
-- Read .arbiter/registry-scoped.json and 19-MODULE-INTEGRATION-MAP.md before writing
+- Read arbiter/registry-scoped.json and 19-MODULE-INTEGRATION-MAP.md before writing
 - Validate that all reused components exist in the codebase
 
 ## Must not do
@@ -266,7 +266,7 @@ Produces the definitive list of what to reuse and how new code wires to existing
 - MASTER-DIRECTIVES.md (project constraints)
 - INTEGRATION-SCHEMA.md (integration map schema)
 - REGISTRY-SCHEMA.md (registry entry schema)
-- .arbiter/registry-scoped.json (scoped component registry)
+- arbiter/registry-scoped.json (scoped component registry)
 - 19-MODULE-INTEGRATION-MAP.md (existing module integration map)
 
 ## Outputs
@@ -312,7 +312,7 @@ Turns the design and integration plan into self-contained per-agent task files �
 - TASK-SCHEMA.md (task file schema)
 - TASK-ARCHETYPES.md (task archetypes)
 - 2-research.md (research evidence)
-- .arbiter/codebase-tree.md (current file tree)
+- arbiter/codebase-tree.md (current file tree)
 
 ## Outputs
 - 5-plan.md (≤500-word human summary with Traceability Matrix)
@@ -336,7 +336,7 @@ Turns the design and integration plan into self-contained per-agent task files �
 - Stay within the file allowlist in the task file
 - Reuse every component listed in integration.md's reuse section
 - Match the OpenAPI contract and MSW mock payloads from design exactly
-- Produce vision snapshots (.arbiter/vision/<task>/*.png) for the UI gate
+- Produce vision snapshots (arbiter/vision/<task>/*.png) for the UI gate
 - Pass gate-web.sh on the first attempt
 
 ## Must not do
@@ -369,7 +369,7 @@ Builds React UI components, Zustand stores, hooks, and service layer from the ta
 ## Outputs
 - web/src/** (bounded by task file allowlist)
 - frontend-report.json (gate results)
-- .arbiter/vision/<task>/*.png (route screenshots for UI gate)
+- arbiter/vision/<task>/*.png (route screenshots for UI gate)
 
 ## Acceptance criteria
 - All acceptance tests in tasks/frontend.task.md pass
@@ -549,7 +549,7 @@ Cross-model semantic audit of the built code — checks business logic correctne
 Escalated on second gate failure — root-cause analysis with fresh context; outcome: fixed, quarantined, or architectural-flaw.
 
 ## Inputs
-- .arbiter/error-logs/<task>/<coder>.truncated.log (gate failure logs)
+- arbiter/error-logs/<task>/<coder>.truncated.log (gate failure logs)
 - <coder>-report.json (gate results)
 - debug-errors.md (error summary)
 - review-rejection.md (reviewer findings if applicable)
@@ -557,7 +557,7 @@ Escalated on second gate failure — root-cause analysis with fresh context; out
 - 3-design.md (design spec)
 - integration.md (wiring map)
 - MODULE_ARCHITECTURE.md (module architecture)
-- .arbiter/vision/<task>/*.png (UI screenshots if FE failure)
+- arbiter/vision/<task>/*.png (UI screenshots if FE failure)
 - MASTER-DIRECTIVES.md (project constraints)
 - DEBUG-NOTES-SCHEMA.md (output schema)
 - RECOVERY-POLICY.md (recovery policy)
@@ -610,7 +610,7 @@ Post-merge memory agent: distills failures and friction into permanent append-on
 - 5-plan.json (machine plan manifest)
 - review.md (reviewer verdict and findings)
 - debug-notes.md (debug outcome, if present)
-- .arbiter/error-logs/<task>/*.truncated.log (gate error logs, if present)
+- arbiter/error-logs/<task>/*.truncated.log (gate error logs, if present)
 
 ## Outputs
 - <task-folder>/summary.md (always written)
@@ -653,7 +653,7 @@ Post-merge memory agent: distills failures and friction into permanent append-on
 Scheduled nightly repo audit — proposes next tasks ranked by impact and auto-enqueues safe maintenance work.
 
 ## Inputs
-- .arbiter/registry.json (component and service registry)
+- arbiter/registry.json (component and service registry)
 - 19-MODULE-INTEGRATION-MAP.md (module integration map)
 - AFTA_GAP_ANALYSIS.md (AFTA compliance gap analysis)
 - SEQUENCING-POLICY.md (task sequencing policy)
@@ -853,7 +853,7 @@ Writes FE and BE tests combined in one pass — hits real code paths and meets t
 ## Quality gates
 - Full build passes
 - All tests pass
-- PR description written (.arbiter/pr-description.md)
+- PR description written (arbiter/pr-description.md)
 - Branch pushed successfully
 `,
     manifest: `# PUSH — Manifest
@@ -867,7 +867,7 @@ Final sanity check, PR description writer, and branch pusher — the last agent 
 - MASTER-DIRECTIVES.md (project constraints)
 
 ## Outputs
-- .arbiter/pr-description.md (PR description)
+- arbiter/pr-description.md (PR description)
 - git push (branch pushed)
 
 ## Acceptance criteria

@@ -1,67 +1,224 @@
 {
+  "_comment": "SINGLE SOURCE OF TRUTH for which model/provider each agent uses. Change models HERE only — rule books never name a model. Set {{OWNER_CHAT_ID}} and {{REPORT_HOUR}} when bootstrapping a new project.",
+  "_auto_merge": "When true, merge-on-green squash-merges the PR once reviewer+CI+isolation+security are green. DEFAULT false (open PR + stop) until proven in your env.",
   "auto_merge": false,
+  "webhook_receiver": {
+    "_comment": "Inbound GitHub webhooks. Set secret to match your GitHub webhook configuration.",
+    "port": 7475,
+    "secret": "{{WEBHOOK_SECRET}}",
+    "enabled": false
+  },
+  "github": {
+    "_comment": "GitHub API token for reading CI logs and posting PR comments.",
+    "token": "{{GITHUB_TOKEN}}",
+    "owner": "{{GITHUB_OWNER}}",
+    "repo": "{{GITHUB_REPO}}"
+  },
+  "coverage_floors": {
+    "_comment": "Minimum coverage % required for Gate 3 (ProvingGround) to pass. Floors sit ~2pt below actuals — never bump same-PR.",
+    "statements": 70,
+    "branches": 65,
+    "functions": 70
+  },
+  "gate_timeout": {
+    "_comment": "Iron Funnel gate duration thresholds. Warn/escalate written to DecisionLog (Telegram in Phase 06).",
+    "warn_hours": 4,
+    "escalate_hours": 8,
+    "critical_path_threshold": 3
+  },
   "gates": {
-    "design": true,
-    "plan": true,
+    "_comment": "Full pipeline gates",
+    "schema": true,
+    "ui": true,
     "review": true
   },
+  "speed_gates": {
+    "_comment": "Speed pipeline gates — schema gate skipped (design agent handles schema inline); UI gate kept; review gate kept.",
+    "schema": false,
+    "ui": true,
+    "review": true
+  },
+  "reporting": {
+    "_comment": "Morning report sent from each developer's machine to owner_chat_id at report_hour:00.",
+    "owner_chat_id": "{{OWNER_CHAT_ID}}",
+    "report_hour": 7
+  },
   "template_vars": {
-    "PROJECT_NAME": "arbiter"
+    "PROJECT_NAME": "{{PROJECT_NAME}}",
+    "PRODUCT_DESCRIPTION": "{{PRODUCT_DESCRIPTION}}",
+    "TARGET_USERS": "{{TARGET_USERS}}",
+    "COMPLIANCE_CONTEXT": "{{COMPLIANCE_CONTEXT}}",
+    "COMPLIANCE_STANDARD": "{{COMPLIANCE_STANDARD}}",
+    "COMPLIANCE_DOC": "{{COMPLIANCE_DOC}}",
+    "FRONTEND_STACK": "{{FRONTEND_STACK}}",
+    "BACKEND_STACK": "{{BACKEND_STACK}}",
+    "UI_LIBRARY": "{{UI_LIBRARY}}",
+    "DATABASE": "{{DATABASE}}",
+    "FRONTEND_TEST_FRAMEWORK": "{{FRONTEND_TEST_FRAMEWORK}}",
+    "BACKEND_TEST_FRAMEWORK": "{{BACKEND_TEST_FRAMEWORK}}",
+    "ERROR_HANDLING_PATTERN": "{{ERROR_HANDLING_PATTERN}}",
+    "ASYNC_PATTERN": "{{ASYNC_PATTERN}}",
+    "MODULE_ISOLATION_RULES": "{{MODULE_ISOLATION_RULES}}",
+    "SIBLING_APPS": "{{SIBLING_APPS}}",
+    "FE_COVERAGE_FLOORS": "{{FE_COVERAGE_FLOORS}}",
+    "BE_COVERAGE_FLOORS": "{{BE_COVERAGE_FLOORS}}",
+    "FE_COVERAGE_CONFIG": "{{FE_COVERAGE_CONFIG}}",
+    "BE_COVERAGE_CONFIG": "{{BE_COVERAGE_CONFIG}}",
+    "WORKSPACE_FE": "{{WORKSPACE_FE}}",
+    "WORKSPACE_BE": "{{WORKSPACE_BE}}",
+    "WORKSPACE_FE_CLAUDE": "{{WORKSPACE_FE_CLAUDE}}",
+    "WORKSPACE_BE_CLAUDE": "{{WORKSPACE_BE_CLAUDE}}",
+    "SECURITY_DOC": "{{SECURITY_DOC}}",
+    "MODULE_ARCHITECTURE_DOC": "{{MODULE_ARCHITECTURE_DOC}}"
+  },
+  "roles": {
+    "triage": {
+      "provider": "claude_max_cli",
+      "model": "claude-haiku-4-5-20251001",
+      "_role": "Upstream router only — classifies tier (1/2/3). Hard 4k token limit. Haiku: cheapest correct option for pure classification."
+    },
+    "reframe": {
+      "provider": "claude_max_cli",
+      "model": "claude-sonnet-4-6",
+      "_role": "Premise challenger — classification + reading-comprehension + YAML formatting. Sonnet is sufficient; heavy reasoning overkill here. Save Opus for reviewer/debugger/plan where deep semantic reasoning matters."
+    },
+    "question": {
+      "provider": "claude_max_cli",
+      "model": "claude-sonnet-4-6",
+      "_role": "Generates clarifying questions and Q-anchors. Sonnet handles the cross-reference invariants well."
+    },
+    "research": {
+      "provider": "claude_max_cli",
+      "model": "claude-sonnet-4-6",
+      "_role": "RAG routing + citation extraction with strict schema (RS1-RS18). Sonnet: can simultaneously hold verbatim Q-anchors + file:line evidence + exact frontmatter field names."
+    },
+    "design": {
+      "provider": "claude_max_cli",
+      "model": "claude-sonnet-4-6",
+      "_role": "Architecture design + DB schema + API contracts. Sonnet produces solid design artifacts at lower cost."
+    },
+    "design-critic": {
+      "provider": "claude_max_cli",
+      "model": "claude-haiku-4-5-20251001",
+      "_role": "Specialized design check. MUST be a different model family than 'design' so it is not grading its own homework."
+    },
+    "integrator": {
+      "provider": "claude_max_cli",
+      "model": "claude-opus-4-7",
+      "_role": "Bidirectional integration enforcement + registry lookup + blast-radius analysis. Deep semantic reasoning required — Opus."
+    },
+    "plan": {
+      "provider": "claude_max_cli",
+      "model": "claude-opus-4-7",
+      "_role": "Produces 5-plan.json + task files. Multi-axis dependency graph + archetype classification — Opus."
+    },
+    "frontend": {
+      "provider": "claude_max_cli",
+      "model": "claude-sonnet-4-6",
+      "_role": "Frontend code generation. Sonnet produces high-quality React/TS code and follows component rules reliably."
+    },
+    "backend": {
+      "provider": "claude_max_cli",
+      "model": "claude-sonnet-4-6",
+      "_role": "Backend code generation. Sonnet handles CQRS + migration tripod patterns well."
+    },
+    "test-writer": {
+      "provider": "claude_max_cli",
+      "model": "claude-sonnet-4-6",
+      "_role": "Writes tests AFTER the coders. VALIDATED: Haiku fails test-writing — cannot hold fixture patterns, assertion libraries, and coverage invariants simultaneously. Sonnet required. i8 cross-model check: reviewer (Opus) audits test-writer (Sonnet) — different families, invariant satisfied."
+    },
+    "debugger": {
+      "provider": "claude_max_cli",
+      "model": "claude-opus-4-7",
+      "_role": "Root-cause diagnosis on failing gates. Deep reasoning on error logs + vision + code — Opus."
+    },
+    "reviewer": {
+      "provider": "claude_max_cli",
+      "model": "claude-opus-4-7",
+      "_role": "PR review: registry duplication check + security rubric + bidirectional wiring + compliance gate. Opus for the highest-stakes gate."
+    },
+    "tech-writer": {
+      "provider": "claude_max_cli",
+      "model": "claude-sonnet-4-6",
+      "_role": "Post-merge doc distillation + lessons loop. Sonnet handles doc authoring and rule-book updates well."
+    },
+    "surveyor": {
+      "provider": "claude_max_cli",
+      "model": "claude-opus-4-7",
+      "_role": "Proactive backlog audit + ranked proposals (nightly). Multi-axis reasoning (impact × urgency × phase-dependency × compliance-gap × blast-radius) — Opus. MUST be a different model family than 'reframe' so surveyor proposals are not subject to the same blind spots as the reframe that later processes them."
+    }
+  },
+  "speed_roles": {
+    "_comment": "5-agent speed pipeline (design → frontend → backend → test-writer → reviewer). Mirrors Soltan-babysitter/front/backend/push flow. 1 UI gate only — schema gate disabled by default.",
+    "design": {
+      "provider": "claude_max_cli",
+      "model": "claude-opus-4-7",
+      "_role": "Speed-pipeline combined design+plan agent. Does the work of 6 full-pipeline agents in one pass — needs Opus for deep reasoning on scope, schema, API contract, and plan generation simultaneously."
+    },
+    "frontend": {
+      "provider": "claude_max_cli",
+      "model": "claude-sonnet-4-6",
+      "_role": "Frontend code generation. Identical to full pipeline role."
+    },
+    "backend": {
+      "provider": "claude_max_cli",
+      "model": "claude-sonnet-4-6",
+      "_role": "Backend code generation. Identical to full pipeline role."
+    },
+    "test-writer": {
+      "provider": "claude_max_cli",
+      "model": "claude-sonnet-4-6",
+      "_role": "Writes tests after builders. VALIDATED: Haiku fails test-writing. Sonnet required. i8: reviewer (Opus) audits test-writer (Sonnet) — different families, invariant satisfied."
+    },
+    "reviewer": {
+      "provider": "claude_max_cli",
+      "model": "claude-opus-4-7",
+      "_role": "PR review: design conformance + security rubric + registry duplication. Highest-stakes gate — Opus. Must differ from builder model family."
+    }
   },
   "providers": {
     "claude_max_cli": {
       "cmd": "claude",
       "headless_flag": "-p"
+    },
+    "anthropic_api": {
+      "base_url": "https://api.anthropic.com",
+      "api_key": ""
+    },
+    "local_mac_ollama": {
+      "endpoint": "http://localhost:11434/api/generate"
+    },
+    "subq": {
+      "base_url": "https://api.subq.ai",
+      "api_key": "{{SUBQ_API_KEY}}",
+      "model": "subq-1",
+      "context_window": 12000000,
+      "_note": "Premium Gate 5 provider. Opt-in via roles.orchestrator.provider = subq. Bypasses context slicing — feeds full repo AST + PR diff (up to 12M tokens) for holistic semantic review."
     }
   },
-  "roles": {
-    "reframe": {
-      "provider": "claude_max_cli",
-      "model": "claude-opus-4-7"
+  "planned_providers": {
+    "alibaba_qwen": {
+      "cmd": "qwen",
+      "headless_flag": "-p",
+      "status": "pending_setup"
     },
-    "research": {
-      "provider": "claude_max_cli",
-      "model": "claude-opus-4-7"
+    "local_ollama_32b": {
+      "endpoint": "http://localhost:11434/api/generate",
+      "status": "pending_setup"
+    }
+  },
+  "future_providers": {
+    "memory_rag": {
+      "provider": "greptile_api",
+      "status": "pending_setup"
     },
-    "design": {
-      "provider": "claude_max_cli",
-      "model": "claude-opus-4-7"
+    "web_search": {
+      "provider": "exa_api",
+      "status": "pending_setup"
     },
-    "design-critic": {
-      "provider": "claude_max_cli",
-      "model": "claude-opus-4-7"
-    },
-    "integrator": {
-      "provider": "claude_max_cli",
-      "model": "claude-opus-4-7"
-    },
-    "plan": {
-      "provider": "claude_max_cli",
-      "model": "claude-opus-4-7"
-    },
-    "frontend": {
-      "provider": "claude_max_cli",
-      "model": "claude-opus-4-7"
-    },
-    "backend": {
-      "provider": "claude_max_cli",
-      "model": "claude-opus-4-7"
-    },
-    "test-writer": {
-      "provider": "claude_max_cli",
-      "model": "claude-opus-4-7"
-    },
-    "reviewer": {
-      "provider": "claude_max_cli",
-      "model": "claude-opus-4-7"
-    },
-    "tech-writer": {
-      "provider": "claude_max_cli",
-      "model": "claude-opus-4-7"
-    },
-    "debugger": {
-      "provider": "claude_max_cli",
-      "model": "claude-opus-4-7"
+    "vision_qa": {
+      "provider": "openai_api",
+      "status": "pending_setup"
     }
   }
 }

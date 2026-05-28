@@ -1,0 +1,10 @@
+agent: test-writer
+always:
+  - agents/templates/test-writer.md
+  - engine/MASTER-DIRECTIVES.md
+  - agents/knowledge/quality-score.md
+  - tasks/test-writer.task.md
+  - web/vitest.config.ts
+  - api/Directory.Build.props
+on_demand:
+  - engine/CLI-LESSONS-LEARNED.md

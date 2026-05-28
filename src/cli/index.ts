@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
 import path from 'node:path';
+import fs from 'node:fs/promises';
 import { Conductor } from '../conductor/Conductor';
 import { GatePoller } from '../gates/GatePoller';
 import { DecisionLog } from '../decisions/DecisionLog';
@@ -89,15 +90,54 @@ program
     const projectId = answers.projectName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
     await registerProject(projectId, answers.projectName, workspaceRoot);
 
-    console.log(`\n✓ arbiter.config.json written`);
-    console.log(`  agents/docs/master-directives.md created`);
-    console.log(`  .arbiter/ directory created (with .gitkeep)`);
-    console.log(`  .gitignore updated with Arbiter runtime entries`);
-    console.log(`  Project registered in ~/.arbiter/projects.json`);
-    console.log(`\nNext steps:`);
-    console.log(`  1. Create a task spec (e.g. my-feature-spec.md)`);
-    console.log(`  2. arbiter task init <task-id> --spec my-feature-spec.md`);
-    console.log(`  3. arbiter conduct <task-id>`);
+    // Create arbiter/ directory structure
+    const arbiterDir = path.join(workspaceRoot, 'arbiter');
+    await fs.mkdir(path.join(arbiterDir, 'tasks'), { recursive: true });
+    await fs.mkdir(path.join(arbiterDir, 'plans'), { recursive: true });
+    await fs.mkdir(path.join(arbiterDir, 'agents'), { recursive: true });
+    const gitkeep = path.join(arbiterDir, '.gitkeep');
+    try { await fs.writeFile(gitkeep, '', 'utf-8'); } catch { /* ok */ }
+
+    // Write developer identity to ~/.arbiter/identity.json
+    const homeDir = process.env['HOME'] ?? process.env['USERPROFILE'] ?? '';
+    if (homeDir) {
+      const arbiterHomeDir = path.join(homeDir, '.arbiter');
+      await fs.mkdir(arbiterHomeDir, { recursive: true });
+      const identityPath = path.join(arbiterHomeDir, 'identity.json');
+      try {
+        await fs.access(identityPath);
+      } catch {
+        // Write default identity. Never prompt in non-interactive mode (would hang CI).
+        const name = nonInteractive
+          ? 'Developer'
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          : ((await import('../bootstrap/Interview.js').then((m: any) => m.askDeveloperName?.()).catch(() => null)) ?? 'Developer');
+        await fs.writeFile(identityPath, JSON.stringify({ name }, null, 2), 'utf-8');
+      }
+    }
+
+    // Telegram admin config is optional and personal — never committed. If absent,
+    // print setup instructions but do not block init.
+    if (homeDir) {
+      const adminConfigPath = path.join(homeDir, '.arbiter', 'admin.config.json');
+      try {
+        await fs.access(adminConfigPath);
+      } catch {
+        console.log(
+          '\nℹ Optional: enable Telegram notifications (gate timeouts, task complete/fail).\n' +
+          `  Create ${adminConfigPath} with:\n` +
+          '    {\n' +
+          '      "telegram": {\n' +
+          '        "bot_token": "<from @BotFather>",\n' +
+          '        "owner_chat_id": "<your chat id>",\n' +
+          '        "tech_lead_chat_id": "<optional, for 8h escalations>"\n' +
+          '      }\n' +
+          '    }\n',
+        );
+      }
+    }
+
+    console.log('\n✓ Arbiter initialised.\n\nNext steps:\n  Create a task: echo "Add login feature" > task.md\n  Run it:        arbiter run task.md\n  Dashboard:     arbiter dashboard\n');
   });
 
 // ─── arbiter conduct ──────────────────────────────────────────────────────────
@@ -251,7 +291,7 @@ program
       }
     } else {
       const fsModule = await import('node:fs/promises');
-      const tasksDir = path.join(root, '.arbiter', 'tasks');
+      const tasksDir = path.join(root, 'arbiter', 'tasks');
       let taskIds: string[];
       try {
         const dirents = await fsModule.readdir(tasksDir, { withFileTypes: true });
@@ -371,7 +411,7 @@ taskCmd
     const root = path.resolve(opts['workspace'] as string);
     const showArchived = Boolean(opts['archived']);
     const fsModule = await import('node:fs/promises');
-    const tasksDir = path.join(root, '.arbiter', 'tasks');
+    const tasksDir = path.join(root, 'arbiter', 'tasks');
     let taskIds: string[];
     try {
       const dirents = await fsModule.readdir(tasksDir, { withFileTypes: true });
@@ -640,7 +680,7 @@ preflightCmd
   .option('--workspace <path>', 'Workspace root', process.cwd())
   .action(async (taskId: string, opts: Record<string, string>) => {
     const root = path.resolve(opts['workspace']);
-    const taskDir = path.join(root, '.arbiter', 'tasks', taskId);
+    const taskDir = path.join(root, 'arbiter', 'tasks', taskId);
     const store = new StateStore(root, taskId);
     const stateResult = await store.read();
     if (!stateResult.ok) { console.error(stateResult.error); process.exit(1); }
@@ -737,6 +777,104 @@ program
       if (!result.ok) return result;
       return { ok: true, value: undefined };
     });
+  });
+
+// ── arbiter sync ─────────────────────────────────────────────────────────────
+const syncCmd = program.command('sync');
+syncCmd
+  .description('Sync agent templates from Arbiter installation to project arbiter/ folder')
+  .option('--check', 'Show what would change without writing (dry run)')
+  .option('--workspace <path>', 'Workspace root (default: cwd)')
+  .action(async (opts: { check?: boolean; workspace?: string }) => {
+    const workspaceRoot = path.resolve(opts.workspace ?? process.cwd());
+    // Find the Arbiter package root (2 dirs up from dist/cli/index.js)
+    const pkgRoot = path.join(__dirname, '..', '..');
+    const destRoot = path.join(workspaceRoot, 'arbiter');
+
+    const syncDirs = [
+      'agents/templates', 'agents/templates-speed',
+      'agents/manifests', 'agents/manifests-speed',
+      'agents/orchestrator', 'agents/triage',
+      'agents/investigator', 'agents/knowledge',
+      'engine',
+    ];
+
+    // Load template_vars from arbiter.config.json if present
+    let templateVars: Record<string, string> = {};
+    try {
+      const cfgRaw = await fs.readFile(path.join(workspaceRoot, 'arbiter.config.json'), 'utf-8');
+      const cfg = JSON.parse(cfgRaw) as { template_vars?: Record<string, string> };
+      templateVars = cfg.template_vars ?? {};
+    } catch { /* no config */ }
+
+    let totalUpdated = 0;
+    let totalUnchanged = 0;
+
+    const { createHash } = await import('node:crypto');
+
+    const syncDir = async (src: string, dest: string): Promise<void> => {
+      let entries: import('node:fs').Dirent[];
+      try { entries = await fs.readdir(src, { withFileTypes: true }); }
+      catch { return; } // src dir doesn't exist in installation
+
+      if (!opts.check) await fs.mkdir(dest, { recursive: true });
+
+      for (const entry of entries) {
+        const srcFile = path.join(src, entry.name);
+        const destFile = path.join(dest, entry.name);
+        if (entry.isDirectory()) {
+          await syncDir(srcFile, destFile);
+        } else {
+          let content = await fs.readFile(srcFile, 'utf-8');
+          for (const [k, v] of Object.entries(templateVars)) {
+            content = content.split(`{{${k}}}`).join(v);
+          }
+          let destContent = '';
+          try { destContent = await fs.readFile(destFile, 'utf-8'); } catch { /* new file */ }
+          const srcHash = createHash('sha256').update(content).digest('hex');
+          const destHash = createHash('sha256').update(destContent).digest('hex');
+          if (srcHash !== destHash) {
+            if (!opts.check) await fs.writeFile(destFile, content, 'utf-8');
+            console.log(`  ${opts.check ? '[would update]' : '[updated]'} ${path.relative(destRoot, destFile)}`);
+            totalUpdated++;
+          } else {
+            totalUnchanged++;
+          }
+        }
+      }
+    };
+
+    for (const dir of syncDirs) {
+      await syncDir(path.join(pkgRoot, dir), path.join(destRoot, dir));
+    }
+
+    console.log(`\nSynced ${totalUpdated + totalUnchanged} files. ${totalUpdated} updated. ${totalUnchanged} unchanged.`);
+  });
+
+// ── arbiter dashboard ─────────────────────────────────────────────────────────
+program.command('dashboard')
+  .description('Start the Arbiter dashboard')
+  .option('--port <port>', 'Port to serve on', '3070')
+  .option('--workspace <path>', 'Workspace root (default: cwd)')
+  .action(async (opts: { port?: string; workspace?: string }) => {
+    const port = opts.port ?? '3070';
+    const pkgRoot = path.join(__dirname, '..', '..');
+    const dashboardDist = path.join(pkgRoot, 'dashboard', 'dist');
+    const dashboardSrc = path.join(pkgRoot, 'dashboard');
+
+    // Check if built dist exists
+    let hasDist = false;
+    try { await fs.access(path.join(dashboardDist, 'index.html')); hasDist = true; } catch { /* not built */ }
+
+    if (!hasDist) {
+      console.log('Building dashboard...');
+      const { execSync } = await import('node:child_process');
+      execSync('npm run build', { cwd: dashboardSrc, stdio: 'inherit' });
+    }
+
+    console.log(`Dashboard running at http://localhost:${port}`);
+    const { execSync } = await import('node:child_process');
+    execSync(`npx --yes serve dist --port ${port} --single`, { cwd: dashboardSrc, stdio: 'inherit' });
   });
 
 program.parseAsync(process.argv).catch(err => {

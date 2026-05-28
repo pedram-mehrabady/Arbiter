@@ -1,7 +1,9 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { useShallow } from 'zustand/react/shallow';
 import css from './AssistantChat.module.css';
+
+const ORCHESTRATOR_API = 'http://localhost:7474';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -9,9 +11,10 @@ interface Message {
 }
 
 export function AssistantChat() {
-  const { settings, setOpenModal } = useAppStore(useShallow((s) => ({
+  const { settings, setOpenModal, jobs } = useAppStore(useShallow((s) => ({
     settings:     s.settings,
     setOpenModal: s.setOpenModal,
+    jobs:         s.arbiterState.jobs,
   })));
 
   const [open, setOpen]         = useState(false);
@@ -23,6 +26,40 @@ export function AssistantChat() {
 
   const provider = settings.assistantProvider;
   const model    = settings.assistantModel || 'claude-opus-4-7';
+  const [orchestratorAvailable, setOrchestratorAvailable] = useState(false);
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+
+  // Probe OrchestratorHttpApi availability
+  useEffect(() => {
+    fetch(`${ORCHESTRATOR_API}/api/orchestrator/history?taskId=probe`, { signal: AbortSignal.timeout(1000) })
+      .then(() => setOrchestratorAvailable(true))
+      .catch(() => setOrchestratorAvailable(false));
+  }, []);
+
+  // Bind the chat to the in-flight task so messages route through the Orchestrator.
+  // Prefer a building job, then a paused one; otherwise no active task (direct LLM).
+  useEffect(() => {
+    const active = jobs.find(j => j.status === 'building')
+      ?? jobs.find(j => j.status === 'paused')
+      ?? null;
+    setActiveTaskId(active?.id ?? null);
+  }, [jobs]);
+
+  // Load history from OrchestratorHttpApi when taskId is set
+  const loadHistory = useCallback(async (taskId: string) => {
+    if (!orchestratorAvailable) return;
+    try {
+      const res = await fetch(`${ORCHESTRATOR_API}/api/orchestrator/history?taskId=${encodeURIComponent(taskId)}`);
+      const data = await res.json() as { ok: boolean; history?: Array<{ role: string; content: string }> };
+      if (data.ok && data.history) {
+        setMessages(data.history.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })));
+      }
+    } catch { /* Non-fatal */ }
+  }, [orchestratorAvailable]);
+
+  useEffect(() => {
+    if (activeTaskId) loadHistory(activeTaskId);
+  }, [activeTaskId, loadHistory]);
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -47,21 +84,36 @@ export function AssistantChat() {
     setBusy(true);
 
     try {
-      const res = await fetch('/api/run-assistant', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          provider,
-          model,
-          messages: next,
-          apiKey: settings.anthropicApiKey || undefined,
-        }),
-      });
-      const data = await res.json() as { ok: boolean; reply?: string; error?: string };
-      setMessages((prev) => [
-        ...prev,
-        { role: 'assistant', content: data.ok ? (data.reply ?? '') : `Error: ${data.error}` },
-      ]);
+      // Route to OrchestratorHttpApi when available and a task is active
+      if (orchestratorAvailable && activeTaskId) {
+        const res = await fetch(`${ORCHESTRATOR_API}/api/orchestrator/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ taskId: activeTaskId, message: text }),
+        });
+        const data = await res.json() as { ok: boolean; reply?: string; error?: string };
+        setMessages((prev) => [
+          ...prev,
+          { role: 'assistant', content: data.ok ? (data.reply ?? '') : `Error: ${data.error}` },
+        ]);
+      } else {
+        // Fallback: direct LLM call via existing API
+        const res = await fetch('/api/run-assistant', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            provider,
+            model,
+            messages: next,
+            apiKey: settings.anthropicApiKey || undefined,
+          }),
+        });
+        const data = await res.json() as { ok: boolean; reply?: string; error?: string };
+        setMessages((prev) => [
+          ...prev,
+          { role: 'assistant', content: data.ok ? (data.reply ?? '') : `Error: ${data.error}` },
+        ]);
+      }
     } catch (e) {
       setMessages((prev) => [
         ...prev,
@@ -100,7 +152,7 @@ export function AssistantChat() {
             <span className={css.panelTitle}>AI Assistant</span>
             {provider && (
               <span className={css.panelMeta}>
-                {provider === 'claude_max_cli' ? 'CLI' : 'API'} · {modelShort}
+                {orchestratorAvailable ? 'Orchestrator' : (provider === 'claude_max_cli' ? 'CLI' : 'API')} · {modelShort}
               </span>
             )}
             <button className={css.panelClose} onClick={() => setOpen(false)}>✕</button>

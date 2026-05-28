@@ -1,8 +1,13 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { createHash } from 'node:crypto';
 import { AgentRole, AssembledContext, ServiceResult } from '../types/index';
 import { estimateTokenCount } from '../providers/LLMProvider';
+import { PackageVersionInjector } from './PackageVersionInjector';
+
+const execFileAsync = promisify(execFile);
 
 export type TemplateVars = Partial<{
   STACK_FRONTEND: string;
@@ -12,6 +17,15 @@ export type TemplateVars = Partial<{
   PROJECT_CONVENTIONS: string;
   PROJECT_NAME: string;
 }>;
+
+const TOKEN_BUDGETS: Partial<Record<AgentRole, number>> = {
+  'triage':       4_000,
+  'investigator': 12_000,
+  'backend':      24_000,
+  'frontend':     24_000,
+  'test-writer':  16_000,
+  'orchestrator': 32_000,
+};
 
 // Each agent role declares which files it needs. Agents never receive files
 // outside this allowlist — this is the agent context scoping principle.
@@ -29,11 +43,14 @@ const AGENT_CONTEXT_MANIFESTS: Record<AgentRole, string[]> = {
   'tech-writer':     ['task.md', 'design.md', 'reviewer-report.md'],
   'debugger':        ['task.md', 'debug-notes.md', 'src/**/*.ts', 'src/**/*.cs'],
   'report-formatter':['gate-report-raw.json'],
-  'gate-poller':     ['.arbiter/pending-gates.json'],
+  'gate-poller':     ['arbiter/pending-gates.json'],
   'surveyor':        ['task.md', 'MASTER-DIRECTIVES.md'],
   'question':        ['task.md'],
   'prd':             ['task.md'],
   'push':            ['task.md', 'frontend-output.md', 'backend-output.md', 'test-writer-output.md'],
+  'triage':          ['task.md', 'arbiter.config.json'],
+  'investigator':    ['task.md', 'engine/MASTER-DIRECTIVES.md'],
+  'orchestrator':    ['task.md', '3-design.md', '5-plan.json'],
 };
 
 const SECTION_SEPARATOR = '\n\n' + '─'.repeat(60) + '\n\n';
@@ -60,6 +77,14 @@ export class ContextAssembler {
 
     const resolvedFiles = await this.resolveFiles(contextFilePaths, taskDir);
     const sections: string[] = [`# SYSTEM\n\n${resolvedSystemPrompt}`];
+
+    // For design role: inject package versions at the top
+    if (role === 'design') {
+      const versionBlock = await new PackageVersionInjector().inject(this.workspaceRoot);
+      if (versionBlock) {
+        sections.push(`# PACKAGE VERSIONS\n\n${versionBlock}`);
+      }
+    }
     const includedFiles: string[] = [];
 
     for (const filePath of resolvedFiles) {
@@ -94,6 +119,100 @@ export class ContextAssembler {
 
   getContextFiles(role: AgentRole): string[] {
     return AGENT_CONTEXT_MANIFESTS[role] ?? [];
+  }
+
+  getTokenBudget(role: AgentRole): number | undefined {
+    return TOKEN_BUDGETS[role];
+  }
+
+  async buildContextWithMadge(
+    role: AgentRole,
+    taskDir: string,
+    targetFiles: string[],
+    lockedContractPaths?: string[],
+  ): Promise<ServiceResult<{ files: string[]; madgeUsed: boolean }>> {
+    const budget = TOKEN_BUDGETS[role];
+    let madgeUsed = false;
+    let files: string[] = [];
+
+    if (targetFiles.length > 0) {
+      try {
+        const { stdout } = await execFileAsync(
+          'npx',
+          ['madge', '--json', ...targetFiles],
+          { cwd: this.workspaceRoot, timeout: 10_000 },
+        );
+        const depGraph = JSON.parse(stdout) as Record<string, string[]>;
+        const allowlist = new Set(AGENT_CONTEXT_MANIFESTS[role] ?? []);
+
+        files = Object.keys(depGraph)
+          .filter(f => allowlist.has(f) || allowlist.has(path.extname(f)))
+          .map(f => path.join(this.workspaceRoot, f));
+
+        madgeUsed = true;
+      } catch {
+        // madge not installed or failed — fall back to glob resolution
+        console.warn('[ContextAssembler] madge not available — falling back to glob resolution');
+        files = await this.resolveFiles(AGENT_CONTEXT_MANIFESTS[role] ?? [], taskDir);
+      }
+    } else {
+      files = await this.resolveFiles(AGENT_CONTEXT_MANIFESTS[role] ?? [], taskDir);
+    }
+
+    // Append locked contracts
+    if (lockedContractPaths?.length) {
+      for (const contractPath of lockedContractPaths) {
+        const abs = path.join(this.workspaceRoot, contractPath);
+        files.push(abs);
+      }
+    }
+
+    // Enforce token budget
+    if (budget) {
+      const budgetedFiles: string[] = [];
+      let tokensSoFar = 0;
+      for (const f of files) {
+        try {
+          const content = await fs.readFile(f, 'utf-8');
+          const fileTokens = estimateTokenCount(content);
+          if (tokensSoFar + fileTokens > budget) break;
+          budgetedFiles.push(f);
+          tokensSoFar += fileTokens;
+        } catch {
+          budgetedFiles.push(f);
+        }
+      }
+      files = budgetedFiles;
+    }
+
+    return { ok: true, value: { files: [...new Set(files)], madgeUsed } };
+  }
+
+  /**
+   * Run madge to produce a dependency trace for the given target paths (relative
+   * to the workspace root). Returns a compact `file → deps` adjacency list capped
+   * at `maxChars`, or '' when madge is unavailable or fails. Callers must treat an
+   * empty result as "no trace available" and degrade gracefully.
+   */
+  async dependencyTrace(targets: string[], maxChars = 8_000): Promise<string> {
+    if (targets.length === 0) return '';
+    try {
+      const { stdout } = await execFileAsync(
+        'npx',
+        ['madge', '--json', ...targets],
+        { cwd: this.workspaceRoot, timeout: 10_000 },
+      );
+      const graph = JSON.parse(stdout) as Record<string, string[]>;
+      const lines = Object.entries(graph)
+        .filter(([, deps]) => deps.length > 0)
+        .map(([file, deps]) => `${file} → ${deps.join(', ')}`);
+      const text = lines.join('\n');
+      if (!text) return '';
+      return text.length > maxChars ? `${text.slice(0, maxChars)}\n… (truncated)` : text;
+    } catch {
+      // madge not installed or failed — no trace; investigator falls back to task.md only
+      return '';
+    }
   }
 
   private async buildSystemPrompt(

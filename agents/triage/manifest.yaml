@@ -1,0 +1,13 @@
+agent: triage
+pipeline: both
+always:
+  - task.md
+  - arbiter.config.json
+never:
+  - agents/templates/
+  - agents/templates-speed/
+  - agents/knowledge/
+  - src/
+  - contracts/
+  - engine/
+token_budget: 4000

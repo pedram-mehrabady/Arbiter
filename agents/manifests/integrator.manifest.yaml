@@ -1,0 +1,9 @@
+agent: integrator
+always:
+  - agents/templates/integrator.md
+  - engine/MASTER-DIRECTIVES.md
+  - 3-design.md
+  - .arbiter/registry.json
+  - {{WORKSPACE_FE}}/19-MODULE-INTEGRATION-MAP.md
+on_demand:
+  - {{DOMAIN_SPEC_DIR}}/*

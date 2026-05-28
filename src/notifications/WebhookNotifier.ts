@@ -1,7 +1,14 @@
 import { createHmac } from 'node:crypto';
 import { NotificationsConfig } from '../types/index';
 
-export type WebhookEvent = 'gate_created' | 'task_complete' | 'task_failed';
+export type WebhookEvent =
+  | 'gate_created'
+  | 'task_complete'
+  | 'task_failed'
+  | 'pr_comment_received'
+  | 'ci_result_received'
+  | 'gate_timeout_warn'
+  | 'gate_timeout_escalate';
 
 export interface WebhookPayload {
   event: WebhookEvent;

@@ -3,9 +3,9 @@ import path from 'node:path';
 import { createHash, sign as cryptoSign, verify as cryptoVerify, generateKeyPairSync } from 'node:crypto';
 import { BuildReceipt, AgentRole, FailureClass, ServiceResult } from '../types/index';
 
-const RECEIPTS_FILE = path.join('.arbiter', 'receipts.jsonl');
-const SIGNING_KEY_FILE = path.join('.arbiter', 'signing-key.pem');
-const PUBLIC_KEY_FILE = path.join('.arbiter', 'signing-key-pub.pem');
+const RECEIPTS_FILE = path.join('arbiter', 'receipts.jsonl');
+const SIGNING_KEY_FILE = path.join('arbiter', 'signing-key.pem');
+const PUBLIC_KEY_FILE = path.join('arbiter', 'signing-key-pub.pem');
 
 export interface ReceiptInput {
   taskId: string;

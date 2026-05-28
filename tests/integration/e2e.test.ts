@@ -220,7 +220,7 @@ the upload percentage in real-time.
   // ── [5] bundle created ────────────────────────────────────────────────────
 
   it('[5] AUDIT-EVIDENCE-BUNDLE.zip was created', async () => {
-    const bundleDir = path.join(root, '.arbiter', 'bundles');
+    const bundleDir = path.join(root, 'arbiter', 'bundles');
     const files = await fs.readdir(bundleDir);
     const zips = files.filter(f => f.endsWith('-AUDIT-EVIDENCE-BUNDLE.zip'));
     expect(zips.length).toBeGreaterThan(0);
@@ -229,7 +229,7 @@ the upload percentage in real-time.
   // ── [6] bundle verify ─────────────────────────────────────────────────────
 
   it('[6] bundle verify returns valid=true', async () => {
-    const bundleDir = path.join(root, '.arbiter', 'bundles');
+    const bundleDir = path.join(root, 'arbiter', 'bundles');
     const files = await fs.readdir(bundleDir);
     const zip = files.find(f => f.endsWith('-AUDIT-EVIDENCE-BUNDLE.zip'));
     expect(zip).toBeDefined();
@@ -243,7 +243,7 @@ the upload percentage in real-time.
   // ── [7] bundle directory structure ───────────────────────────────────────
 
   it('[7] bundle contains all 9 evidence directories', async () => {
-    const bundleDir = path.join(root, '.arbiter', 'bundles');
+    const bundleDir = path.join(root, 'arbiter', 'bundles');
     const files = await fs.readdir(bundleDir);
     const zipFile = files.find(f => f.endsWith('-AUDIT-EVIDENCE-BUNDLE.zip'));
     expect(zipFile).toBeDefined();
@@ -321,8 +321,8 @@ the upload percentage in real-time.
     const root2 = await makeWorkspace();
     try {
       await fs.cp(
-        path.join(root, '.arbiter', 'evidence-cache'),
-        path.join(root2, '.arbiter', 'evidence-cache'),
+        path.join(root, 'arbiter', 'evidence-cache'),
+        path.join(root2, 'arbiter', 'evidence-cache'),
         { recursive: true },
       );
 

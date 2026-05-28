@@ -8,12 +8,12 @@ import { DecisionLog } from '../decisions/DecisionLog';
 import { GitCommitReader } from './GitCommitReader';
 import { BundleManifestBuilder, ALC_ARTIFACT_MAP, BundleManifest } from './BundleManifest';
 
-const BUNDLE_DIR = path.join('.arbiter', 'bundles');
-const SIGNING_KEY_FILE = path.join('.arbiter', 'signing-key.pem');
-const PUBLIC_KEY_FILE = path.join('.arbiter', 'signing-key-pub.pem');
+const BUNDLE_DIR = path.join('arbiter', 'bundles');
+const SIGNING_KEY_FILE = path.join('arbiter', 'signing-key.pem');
+const PUBLIC_KEY_FILE = path.join('arbiter', 'signing-key-pub.pem');
 
 // Maps bundle-relative destination paths to their source locations under
-// .arbiter/tasks/<taskId>/. A null source means the file is generated.
+// arbiter/tasks/<taskId>/. A null source means the file is generated.
 const ARTIFACT_SOURCE_MAP: Array<{
   dest: string;
   srcFile: string | null;
@@ -73,7 +73,7 @@ export class BundleAssembler {
   }
 
   async assemble(taskId: string, state: TaskState): Promise<ServiceResult<BundleResult>> {
-    const taskDir = path.join(this.workspaceRoot, '.arbiter', 'tasks', taskId);
+    const taskDir = path.join(this.workspaceRoot, 'arbiter', 'tasks', taskId);
     const bundleDir = path.join(this.workspaceRoot, BUNDLE_DIR);
     const zipPath = path.join(bundleDir, `${taskId}-AUDIT-EVIDENCE-BUNDLE.zip`);
     const sigPath = `${zipPath}.sig`;

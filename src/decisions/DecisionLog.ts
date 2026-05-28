@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { DecisionLogEntry, FailureClass, AgentRole, ServiceResult } from '../types/index';
 
-const LOG_FILE = path.join('.arbiter', 'decision-log.jsonl');
+const LOG_FILE = path.join('arbiter', 'decision-log.jsonl');
 
 export class DecisionLog {
   private readonly filePath: string;

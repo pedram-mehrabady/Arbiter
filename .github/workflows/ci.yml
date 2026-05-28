@@ -13,7 +13,7 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [18, 20, 22]
+        node-version: [20, 22]
 
     steps:
       - uses: actions/checkout@v4
@@ -32,3 +32,98 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+  smoke-test:
+    name: Smoke Test
+    runs-on: ubuntu-latest
+    needs: [test]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify CLI is runnable
+        run: node "$GITHUB_WORKSPACE/dist/cli/index.js" --version
+
+      - name: Run arbiter init --non-interactive in a temp workspace
+        run: |
+          mkdir -p /tmp/arbiter-smoke
+          cd /tmp/arbiter-smoke
+          node "$GITHUB_WORKSPACE/dist/cli/index.js" init --non-interactive --workspace /tmp/arbiter-smoke
+
+      - name: Verify init created config + arbiter/ folder
+        run: |
+          test -f /tmp/arbiter-smoke/arbiter.config.json && echo "OK: arbiter.config.json present"
+          test -d /tmp/arbiter-smoke/arbiter && echo "OK: arbiter/ folder present"
+
+  dashboard-typecheck:
+    name: Dashboard Typecheck
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dashboard dependencies
+        run: npm ci
+        working-directory: dashboard
+
+      - name: Typecheck dashboard
+        run: npx tsc --noEmit
+        working-directory: dashboard
+
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    needs: [test, smoke-test, dashboard-typecheck]
+    # Only on a real merge to main — never on PRs.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Publish if the version is new
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "NPM_TOKEN not set — skipping publish (configure the repo secret to enable)."
+            exit 0
+          fi
+          NAME=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
+            echo "$NAME@$VERSION already published — skipping."
+          else
+            echo "Publishing $NAME@$VERSION…"
+            npm publish
+          fi

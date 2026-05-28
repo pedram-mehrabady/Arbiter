@@ -1,0 +1,10 @@
+agent: tech-writer
+always:
+  - agents/templates/tech-writer.md
+  - engine/MASTER-DIRECTIVES.md
+  - .arbiter/error-logs/<task>
+  - debug-notes.md
+on_demand:
+  - engine/CLI-LESSONS-LEARNED.md
+  - {{WORKSPACE_FE}}/19-MODULE-INTEGRATION-MAP.md
+  - .arbiter/registry.json

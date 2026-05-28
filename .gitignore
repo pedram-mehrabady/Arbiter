@@ -4,19 +4,32 @@ dist/
 *.d.ts.map
 
 # Runtime directories — never commit
-.arbiter/state.json
-.arbiter/decision-log.jsonl
-.arbiter/receipts.jsonl
-.arbiter/usage.jsonl
-.arbiter/pending-gates.json
-.arbiter/bundles/
-.arbiter/signing-key.pem
+arbiter/state.db
+arbiter/state.json
+arbiter/decision-log.jsonl
+arbiter/receipts.jsonl
+arbiter/usage.jsonl
+arbiter/pending-gates.json
+arbiter/bundles/
+arbiter/signing-key.pem
+arbiter/factory/
 
 # Keep these in git
-!.arbiter/.gitkeep
+!arbiter/.gitkeep
+
+# Local agent-doc factory + developer identity — zero footprint on repo
+.arbiter/
+
+# Dashboard test output & connected test-project clones
+dashboard/test-results/
+dashboard/playwright-report/
+dashboard/foederata/
 
 # OS / editor
 .DS_Store
 .env
 *.local
 .vscode/settings.json
+
+# Home-level identity (never in project)
+# ~/.arbiter/identity.json is automatically excluded (outside project)

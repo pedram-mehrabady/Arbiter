@@ -18,6 +18,8 @@ export { ContextPruner } from './context/ContextPruner';
 export { AnthropicProvider } from './providers/AnthropicProvider';
 export { AnthropicSdkProvider } from './providers/AnthropicSdkProvider';
 export { OllamaProvider } from './providers/OllamaProvider';
+export { SubQProvider } from './providers/SubQProvider';
+export type { SubQConfig } from './providers/SubQProvider';
 // MockProvider is intentionally NOT exported — it is test-only.
 // Import directly: import { MockProvider } from '@arbiter-pipeline/cli/dist/providers/MockProvider'
 export { estimateCost, estimateTokenCount, MODEL_COSTS } from './providers/LLMProvider';
@@ -58,6 +60,8 @@ export { DECOMPOSABLE_ROLES, GENERIC_IMPL_IDS, FIXED_PIPELINE_IDS } from './plan
 export { BundleAssembler } from './bundle/BundleAssembler';
 export { BundleManifestBuilder, ALC_ARTIFACT_MAP, ALC_CONTROLS } from './bundle/BundleManifest';
 export { GitCommitReader } from './bundle/GitCommitReader';
+
+export type { AgentCapability, AgentMessage, HandoffPayload, AcpHandshake } from './acp/types';
 
 export type { PreflightVerdict } from './preflight/PreflightCheck';
 export type { DebuggerDiff, DebuggerGuardResult } from './conductor/DebuggerGuard';

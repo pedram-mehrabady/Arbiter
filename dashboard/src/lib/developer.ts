@@ -8,7 +8,7 @@ export function setDeveloperName(name: string) {
   localStorage.setItem(NAME_KEY, name.trim());
 }
 
-/** Write { name } to .arbiter/developer-identity.json so shell scripts can read it. */
+/** Write { name } to arbiter/developer-identity.json so shell scripts can read it. */
 export async function writeDeveloperIdentityFile(
   name: string,
   arbiterDir: FileSystemDirectoryHandle,

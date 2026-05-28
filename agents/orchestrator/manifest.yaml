@@ -1,0 +1,14 @@
+agent: orchestrator
+pipeline: both
+always:
+  - agents/orchestrator/rules.md
+  - engine/MASTER-DIRECTIVES.md
+  - engine/GATE_PLAYBOOK.md
+on_demand:
+  - 3-design.md
+  - 5-plan.json
+  - contracts/**
+never:
+  - src/
+  - dashboard/
+token_budget: 32000
