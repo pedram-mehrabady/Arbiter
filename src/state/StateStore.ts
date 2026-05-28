@@ -2,13 +2,16 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { TaskState, SubTaskEntry, ServiceResult } from '../types/index';
 
-const STATE_FILE = path.join('.arbiter', 'state.json');
+const LEGACY_STATE_FILE = path.join('.arbiter', 'state.json');
 
 export class StateStore {
-  private readonly filePath: string;
+  readonly filePath: string;
 
-  constructor(workspaceRoot: string) {
-    this.filePath = path.join(workspaceRoot, STATE_FILE);
+  constructor(workspaceRoot: string, taskId?: string) {
+    // Per-task path when taskId provided; legacy single-file path otherwise.
+    this.filePath = taskId
+      ? path.join(workspaceRoot, '.arbiter', 'tasks', taskId, 'state.json')
+      : path.join(workspaceRoot, LEGACY_STATE_FILE);
   }
 
   async read(): Promise<ServiceResult<TaskState>> {

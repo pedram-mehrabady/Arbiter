@@ -1,0 +1,65 @@
+.wrap { }
+
+.sectionTitle {
+  font-size: 10px; font-weight: 800; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--accent);
+  margin-bottom: 14px;
+}
+
+.filters {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  margin-bottom: 16px;
+}
+
+.chip {
+  padding: 4px 14px; border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--bg2); color: var(--muted);
+  font-size: 12px; font-weight: 600; cursor: pointer;
+  transition: all .15s;
+}
+.chip:hover { border-color: var(--accent); color: var(--accent); }
+.chipActive { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+.tableWrap {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.thead {
+  display: grid;
+  grid-template-columns: 90px 1fr 80px 70px;
+  padding: 8px 14px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  font-size: 10px; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--muted);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 90px 1fr 80px 70px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  align-items: center;
+  transition: background .1s;
+}
+.row:last-child { border-bottom: none; }
+.row:hover { background: var(--bg2); }
+
+.colMethod { }
+.colPath   { font-size: 13px; font-family: monospace; color: var(--text); }
+.colCount  { font-size: 12px; color: var(--muted); text-align: right; }
+.colMs     { font-size: 13px; font-weight: 700; text-align: right; }
+
+.badge {
+  display: inline-block;
+  padding: 2px 7px; border-radius: 4px;
+  font-size: 10px; font-weight: 800; letter-spacing: .04em;
+}
+.methodGet    { background: #dbeafe; color: #1d4ed8; }
+.methodPost   { background: #dcfce7; color: #15803d; }
+.methodPut    { background: #fef3c7; color: #92400e; }
+.methodDelete { background: #fee2e2; color: #991b1b; }
+.methodPatch  { background: #ede9fe; color: #5b21b6; }

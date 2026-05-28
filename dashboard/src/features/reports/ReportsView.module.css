@@ -1,0 +1,148 @@
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.subNav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 24px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.subBtn {
+  padding: 9px 16px;
+  background: transparent; border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted); font-size: 12px; font-weight: 600;
+  cursor: pointer; font-family: inherit;
+  transition: color .15s, border-color .15s;
+  margin-bottom: -1px;
+}
+.subBtn:hover { color: var(--text); }
+.subBtnActive { color: var(--accent); border-bottom-color: var(--accent); }
+
+.devBadge {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.content {
+  flex: 1;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Overview */
+.overviewGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.overviewGrid > :first-child { grid-column: 1 / -1; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px;
+}
+
+.cardTitle {
+  font-size: 10px; font-weight: 800;
+  text-transform: uppercase; letter-spacing: .1em;
+  color: var(--muted); margin-bottom: 14px;
+}
+
+.agentsGrid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+}
+
+.empty { font-size: 12px; color: var(--muted); font-style: italic; }
+
+/* Conductor & Gates card */
+.gateList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.gateRow {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.gateIcon {
+  font-size: 14px;
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: #f59e0b;
+}
+
+.gateBody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.gateName {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.gatePhase {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.gateDesc {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.gateFootnote {
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  line-height: 1.6;
+  margin-top: 4px;
+}
+
+/* Single column */
+.singleCol { max-width: 860px; }
+
+/* Full height — for graph views */
+.fullHeight { flex: 1; display: flex; flex-direction: column; }
+
+/* Architecture */
+.archGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+@media (max-width: 900px) {
+  .agentsGrid  { grid-template-columns: repeat(2, 1fr); }
+  .archGrid    { grid-template-columns: 1fr; }
+}

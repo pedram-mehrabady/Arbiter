@@ -7,6 +7,80 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [Unreleased] — v0.3.0
+
+See [ROADMAP.md](./ROADMAP.md) for full feature descriptions, acceptance criteria, and implementation notes.
+
+### Planned
+
+- **Telegram + Slack inline gate approval** — native bot/webhook notifications with Approve/Reject buttons; no separate tool needed for mobile gate management
+- **Scheduled pipeline runs** — cron-style and one-shot scheduling via `.arbiter/schedule.json`; `arbiter schedule` and `arbiter daemon` commands
+- **Codex CLI + Gemini CLI + OpenCode providers** — command-based provider adapters matching the existing `AnthropicProvider` pattern
+- **Remote gate approval tunnel** — `arbiter ui --tunnel` exposes the local UI over a secure public URL for cross-machine gate approval
+- **Multi-repo task dependencies** — tasks can declare `depends_on_workspace` pointing to another registered project; Arbiter blocks until the remote task completes
+- **Server-Sent Events streaming in web UI** — live agent output in the browser; replaces 10-second polling refresh
+- **Agent question bus** — structured ask/reply channel in `.arbiter/questions.json`; agents can pose questions that a later agent (or human) answers before the pipeline continues
+
+---
+
+## [0.2.0] — 2026-05-28
+
+### Multi-task support
+
+- **TaskArchiver** — archive active task to `.arbiter/archive/<task-id>.json`, freeing the workspace slot; restore any archived task back to active
+- `arbiter task archive <task-id>` / `arbiter task restore <task-id>` commands
+- `arbiter task list --archived` shows both active and archived tasks
+- `arbiter task templates` lists the four built-in spec templates
+
+### Gate notifications (webhook)
+
+- **WebhookNotifier** — fires `gate_created`, `task_complete`, `task_failed` events to any HTTP endpoint; HMAC-SHA256 signed with optional `secret`
+- `notifications` block in `FactoryConfig` (`webhook_url`, `on_gate`, `on_complete`, `on_failure`, `secret`)
+- `GatePoller.setNotifier()` — injected by Conductor after config load
+
+### New providers
+
+- **OpenAIProvider** — native `fetch`-based provider; supports gpt-4o, gpt-4o-mini, o1, o1-mini, o3-mini; reads `OPENAI_API_KEY`
+- **GeminiProvider** — native `fetch`-based provider; supports gemini-2.5-pro, gemini-2.5-flash, gemini-2.0-flash, gemini-1.5-pro/flash; reads `GEMINI_API_KEY`
+- `arbiter init` interview extended to 5 provider choices (+ openai, gemini)
+- `MODEL_COSTS` table updated with 10 new model entries across OpenAI and Gemini
+- `ConfigGenerator` generates correct provider config and tiered role-model assignments for all five providers
+
+### Git auto-commit
+
+- **GitAutoCommit** — runs `git add -A && git commit` after each sub-task completes; injection-safe `execFile` (no shell expansion); configurable `message_template` with `{{task_id}}`, `{{sub_task_id}}`, `{{agent_role}}` tokens; optional `author_name`/`author_email`
+- `git_auto_commit` block in `FactoryConfig` (`enabled`, `author_name`, `author_email`, `message_template`)
+
+### Task spec templates
+
+- Four built-in templates in `agents/templates/tasks/`: `new-feature.md`, `bug-fix.md`, `refactor.md`, `api-endpoint.md`
+- `arbiter task init <task-id> --template <name>` resolves template from workspace-local path first, then package-bundled path
+
+### Web UI
+
+- **UIServer** — local HTTP server (`arbiter ui --port 4747`); renders pipeline status and pending gates; Approve/Reject buttons submit to `POST /gate/approve` and `POST /gate/reject`; auto-refreshes every 10 seconds
+- HTML is server-rendered (no client JS framework); no new npm dependencies
+
+### Spec watcher
+
+- **SpecWatcher** — polls a directory for new `.md` files; auto-inits and conducts each file as a task; moves completed specs to `processed/`, failed specs to `error/`
+- `arbiter watch --dir <path>` command; configurable `--interval`
+- `watch` block in `FactoryConfig` (`spec_dir`, `poll_interval_ms`)
+
+---
+
+## [0.1.1] — 2026-05-27
+
+### Fixed
+
+- **`arbiter init` interview stored "1" literally** for frontend/backend choices — added numbered menu display (`1) react  2) next  …`) and lookup maps (`FRONTEND_MAP`, `BACKEND_MAP`) that resolve number inputs to framework names
+- **`bin` field executable bit** — changed build script to `tsc && chmod +x dist/cli/index.js`; npm no longer strips the `bin[arbiter]` entry at publish time
+- **Commander.js camelCase options** — `--non-interactive` correctly read as `opts['nonInteractive']`; `--dry-run` as `opts['dryRun']`; `--max-parallel` as `opts['maxParallel']`
+- **`task list` missing status annotation** — now reads `state.json` and marks the active task with `*  [status]`
+- **`task show` command added** — was missing; now prints per-sub-task status table for a named task
+
+---
+
 ## [0.1.0] — 2026-05-27
 
 Initial public release.

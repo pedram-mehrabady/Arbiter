@@ -1,0 +1,541 @@
+/* ── Modal shell (scrollable body) ─────────────────────────────────────────── */
+.modal {
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+}
+
+.body {
+  overflow-y: auto;
+  flex: 1;
+  padding: 20px 22px;
+}
+
+/* ── Connection status ───────────────────────────────────────────────────────── */
+.connRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  margin-bottom: 0;
+}
+.connStatus { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.connStatusOk { color: var(--accent); }
+.connDot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+.connDotOk { background: var(--accent); }
+
+.connectBtn {
+  margin-left: auto;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px; font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity .15s;
+}
+.connectBtn:hover { opacity: .88; }
+
+/* ── Divider ────────────────────────────────────────────────────────────────── */
+.divider {
+  height: 1px;
+  background: var(--border);
+  margin: 18px 0;
+}
+
+/* ── Fields ─────────────────────────────────────────────────────────────────── */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.fieldLabel {
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .07em;
+  color: var(--muted);
+}
+
+.fieldHint {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: -2px;
+}
+
+.input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg2);
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color .15s;
+}
+.input:focus { border-color: var(--accent); }
+
+.repoRow {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.repoRow .input { flex: 1; }
+
+.folderBtn {
+  flex-shrink: 0;
+  padding: 9px 11px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg2);
+  font-size: 14px;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+  line-height: 1;
+}
+.folderBtn:hover { border-color: var(--accent); background: var(--surface); }
+
+.osToggle { display: flex; gap: 6px; }
+.osBtn {
+  flex: 1;
+  padding: 9px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg2);
+  color: var(--muted);
+  font-size: 13px; font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all .15s;
+}
+.osBtnActive { border-color: var(--accent); color: var(--accent); background: var(--surface); }
+
+/* ── Section labels ────────────────────────────────────────────────────────── */
+.sectionLabel {
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .07em;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.sectionHint {
+  font-size: 11px;
+  color: var(--muted);
+  opacity: 0.75;
+  margin-bottom: 12px;
+}
+.sectionHint code {
+  font-family: monospace;
+  background: var(--bg2);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+/* ── Provider credential cards ─────────────────────────────────────────────── */
+.providerList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.providerCard {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: var(--bg2);
+}
+
+.providerCardHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.providerName {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  flex: 1;
+}
+
+.providerBadge {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  padding: 2px 7px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+.badge_cli   { background: rgba(99,102,241,.15); color: #6366f1; }
+.badge_api   { background: rgba(16,185,129,.15); color: #059669; }
+.badge_local { background: rgba(245,158,11,.15); color: #d97706; }
+
+.providerCliNote {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.providerCliNote code {
+  font-family: monospace;
+  background: var(--surface);
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: var(--text);
+}
+
+/* ── CLI setup steps ─────────────────────────────────────────────────────── */
+.cliSetup {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cliSetupNote {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.cliSetupNote code {
+  font-family: monospace;
+  background: var(--surface);
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: var(--text);
+}
+
+.cliSteps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cliStep {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.cliStepNum {
+  flex-shrink: 0;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+  margin-top: 1px;
+}
+
+.cliStepLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 5px;
+}
+
+.cliOnce {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--muted);
+  margin-left: 4px;
+}
+
+.cliCmdRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cliCmd {
+  flex: 1;
+  font-family: monospace;
+  font-size: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 10px;
+  color: var(--text);
+  display: block;
+}
+
+.cliCopy {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg2);
+  color: var(--muted);
+  font-size: 11px; font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.cliCopy:hover { border-color: var(--accent); color: var(--accent); }
+
+.cliStepSub {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 4px;
+  opacity: 0.75;
+}
+
+.providerFields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.providerFieldRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.providerFieldLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  min-width: 66px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.providerInput {
+  flex: 1;
+  padding: 7px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  font-family: monospace;
+  outline: none;
+  transition: border-color .15s;
+}
+.providerInput:focus { border-color: var(--accent); }
+
+/* ── Apply-to-all row ──────────────────────────────────────────────────────── */
+.allModelRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.allModelLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin-right: 2px;
+}
+
+.allModelBtn {
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg2);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all .12s;
+}
+.allModelBtn:hover { border-color: var(--accent); color: var(--accent); background: var(--surface); }
+
+/* ── Agent roles table ─────────────────────────────────────────────────────── */
+.agentTable {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.agentRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agentRowHeader {
+  opacity: 0.5;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin-bottom: 2px;
+}
+
+.agentName {
+  font-size: 12px;
+  font-family: monospace;
+  color: var(--muted);
+  min-width: 90px;
+}
+
+.agentSelect {
+  flex: 1;
+  padding: 6px 8px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--bg2);
+  color: var(--text);
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+  cursor: pointer;
+  transition: border-color .15s;
+  min-width: 0;
+}
+.agentSelect:focus { border-color: var(--accent); }
+
+.agentProvider {
+  font-size: 11px;
+  font-family: monospace;
+  color: var(--muted);
+  min-width: 120px;
+  opacity: 0.6;
+}
+
+.agentModel {
+  font-size: 11px;
+  font-family: monospace;
+  color: var(--muted);
+  flex: 1;
+}
+
+.agentInput {
+  flex: 1;
+  padding: 6px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--bg2);
+  color: var(--text);
+  font-size: 12px;
+  font-family: monospace;
+  outline: none;
+  transition: border-color .15s;
+  min-width: 0;
+}
+.agentInput:focus { border-color: var(--accent); }
+
+/* ── Save row ───────────────────────────────────────────────────────────────── */
+.saveRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.saveConfigBtn {
+  margin-left: auto;
+  padding: 7px 16px;
+  border-radius: 7px;
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px; font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all .15s;
+}
+.saveConfigBtn:hover:not(:disabled) { background: var(--accent); color: #fff; }
+.saveConfigBtn:disabled { opacity: .4; cursor: not-allowed; }
+
+.saveOk    { font-size: 12px; color: var(--accent); font-weight: 600; }
+.saveError { font-size: 12px; color: var(--red, #ef4444); font-weight: 600; }
+
+/* ── Footer ─────────────────────────────────────────────────────────────────── */
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.saveBtn {
+  padding: 9px 22px;
+  border-radius: 8px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px; font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity .15s;
+}
+.saveBtn:hover { opacity: .88; }
+
+.fieldHint {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: -2px;
+}
+
+.agentTable {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.agentRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.agentName {
+  font-size: 12px;
+  font-family: monospace;
+  color: var(--muted);
+  min-width: 100px;
+}
+
+.agentProvider {
+  font-size: 11px;
+  font-family: monospace;
+  color: var(--muted);
+  min-width: 120px;
+  opacity: 0.6;
+}
+
+.agentInput {
+  flex: 1;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg2);
+  color: var(--text);
+  font-size: 12px;
+  font-family: monospace;
+  outline: none;
+}
+.agentInput:focus { border-color: var(--accent); }
+
+.saveConfigBtn {
+  margin-top: 10px;
+  padding: 7px 16px;
+  border-radius: 7px;
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px; font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all .15s;
+}
+.saveConfigBtn:hover { background: var(--accent); color: #fff; }

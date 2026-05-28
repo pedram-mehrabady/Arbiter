@@ -11,9 +11,28 @@ import { InterviewAnswers } from './Interview';
 function buildRoles(answers: InterviewAnswers): Record<string, { provider: string; model: string }> {
   const { provider } = answers;
 
-  const opus   = provider === 'ollama' ? 'llama3' : 'claude-opus-4-7';
-  const sonnet = provider === 'ollama' ? 'llama3' : (provider === 'anthropic_sdk' ? answers.providerModel : 'claude-sonnet-4-6');
-  const haiku  = provider === 'ollama' ? 'llama3' : 'claude-haiku-4-5-20251001';
+  let opus: string, sonnet: string, haiku: string;
+
+  if (provider === 'ollama') {
+    opus = sonnet = haiku = answers.providerModel || 'llama3';
+  } else if (provider === 'openai') {
+    opus   = 'gpt-4o';
+    sonnet = answers.providerModel || 'gpt-4o';
+    haiku  = 'gpt-4o-mini';
+  } else if (provider === 'gemini') {
+    opus   = 'gemini-2.5-pro';
+    sonnet = answers.providerModel || 'gemini-2.5-flash';
+    haiku  = 'gemini-2.5-flash';
+  } else if (provider === 'anthropic_sdk') {
+    opus   = 'claude-opus-4-7';
+    sonnet = answers.providerModel || 'claude-sonnet-4-6';
+    haiku  = 'claude-haiku-4-5-20251001';
+  } else {
+    // claude_max_cli
+    opus   = 'claude-opus-4-7';
+    sonnet = 'claude-sonnet-4-6';
+    haiku  = 'claude-haiku-4-5-20251001';
+  }
 
   return {
     reframe:        { provider, model: sonnet },
@@ -28,6 +47,8 @@ function buildRoles(answers: InterviewAnswers): Record<string, { provider: strin
     reviewer:       { provider, model: opus   },
     'tech-writer':  { provider, model: sonnet },
     debugger:       { provider, model: opus   },
+    prd:            { provider, model: sonnet },
+    push:           { provider, model: sonnet },
   };
 }
 
@@ -35,6 +56,10 @@ function buildProviderConfig(answers: InterviewAnswers): Record<string, unknown>
   switch (answers.provider) {
     case 'anthropic_sdk':
       return { anthropic_sdk: { api_key_env: 'ANTHROPIC_API_KEY' } };
+    case 'openai':
+      return { openai: { api_key_env: 'OPENAI_API_KEY' } };
+    case 'gemini':
+      return { gemini: { api_key_env: 'GEMINI_API_KEY' } };
     case 'ollama':
       return { ollama: { base_url: 'http://localhost:11434' } };
     default:
@@ -87,7 +112,39 @@ export async function generateConfig(
     'utf-8',
   );
 
+  // Create .arbiter/ directory with .gitkeep so git tracks it
+  const arbiterDir = path.join(workspaceRoot, '.arbiter');
+  await fs.mkdir(arbiterDir, { recursive: true });
+  const gitkeepPath = path.join(arbiterDir, '.gitkeep');
+  try { await fs.access(gitkeepPath); } catch { await fs.writeFile(gitkeepPath, '', 'utf-8'); }
+
+  // Append arbiter runtime entries to .gitignore (create if absent)
+  await appendGitignore(workspaceRoot);
+
   return { ok: true, value: configPath };
+}
+
+const ARBITER_GITIGNORE_BLOCK = `
+# Arbiter runtime — do not commit
+.arbiter/state.json
+.arbiter/decision-log.jsonl
+.arbiter/receipts.jsonl
+.arbiter/usage.jsonl
+.arbiter/pending-gates.json
+.arbiter/evidence-cache.json
+.arbiter/bundles/
+.arbiter/signing-key.pem
+.arbiter/signing-key-pub.pem
+# Keep the directory marker and task outputs
+!.arbiter/.gitkeep
+`;
+
+async function appendGitignore(workspaceRoot: string): Promise<void> {
+  const gitignorePath = path.join(workspaceRoot, '.gitignore');
+  let existing = '';
+  try { existing = await fs.readFile(gitignorePath, 'utf-8'); } catch { /* will create it */ }
+  if (existing.includes('.arbiter/state.json')) return;
+  await fs.writeFile(gitignorePath, existing + ARBITER_GITIGNORE_BLOCK, 'utf-8');
 }
 
 function buildMasterDirectives(answers: InterviewAnswers): string {

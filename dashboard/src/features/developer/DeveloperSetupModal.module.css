@@ -1,0 +1,178 @@
+.overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.65);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 900;
+}
+
+.closeBtn {
+  position: absolute; top: 12px; right: 14px;
+  background: none; border: none; cursor: pointer;
+  font-size: 16px; color: var(--muted); line-height: 1;
+  padding: 4px 6px; border-radius: 4px; font-family: inherit;
+}
+.closeBtn:hover { color: var(--text); background: var(--bg2); }
+
+.modal {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 32px;
+  width: 400px;
+  max-width: 92vw;
+  box-shadow: 0 24px 48px rgba(0,0,0,.4);
+}
+
+.closeBtn {
+  position: absolute; top: 12px; right: 14px;
+  background: none; border: none; cursor: pointer;
+  font-size: 16px; color: var(--muted); line-height: 1;
+  padding: 4px 6px; border-radius: 4px; font-family: inherit;
+}
+.closeBtn:hover { color: var(--text); background: var(--bg2); }
+
+.icon { font-size: 28px; text-align: center; margin-bottom: 12px; }
+
+.title {
+  font-size: 18px; font-weight: 800;
+  color: var(--text); text-align: center; margin-bottom: 6px;
+}
+
+.sub {
+  font-size: 12px; color: var(--muted);
+  text-align: center; line-height: 1.5; margin-bottom: 24px;
+}
+
+.label {
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .08em;
+  color: var(--muted); margin-bottom: 7px; margin-top: 16px;
+}
+.label:first-of-type { margin-top: 0; }
+
+.input {
+  width: 100%; box-sizing: border-box;
+  padding: 10px 14px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--bg2);
+  color: var(--text); font-size: 14px; font-family: inherit;
+  outline: none; transition: border-color .15s;
+}
+.input:focus { border-color: var(--accent); }
+
+/* OS toggle */
+.osToggle { display: flex; gap: 8px; }
+.osBtn {
+  flex: 1; padding: 9px 0; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--bg2);
+  color: var(--muted); font-size: 13px; font-weight: 600;
+  font-family: inherit; cursor: pointer; transition: all .12s;
+}
+.osBtnActive {
+  border-color: var(--accent); background: var(--accent);
+  color: #fff;
+}
+
+/* Folder picker */
+.folderRow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.folderBtn {
+  padding: 9px 16px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--bg2);
+  color: var(--text); font-size: 13px; font-weight: 600;
+  font-family: inherit; cursor: pointer; transition: background .12s;
+  white-space: nowrap;
+}
+.folderBtn:hover { background: var(--bg); }
+
+.folderPath {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 12px; color: var(--muted);
+  max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.folderCheck { color: var(--green); font-weight: 800; }
+
+.folderError {
+  font-size: 11px; color: var(--red, #ef4444);
+  margin-top: 6px; line-height: 1.4;
+}
+
+.folderHint {
+  font-size: 10px; color: var(--muted);
+  margin-top: 5px; line-height: 1.4; opacity: 0.7;
+}
+
+/* Path connect fallback */
+.pathOr {
+  font-size: 10px; color: var(--muted); text-align: center;
+  margin-top: 12px; margin-bottom: 8px; letter-spacing: .04em;
+}
+
+.pathRow { display: flex; gap: 8px; }
+
+.pathInput {
+  flex: 1; min-width: 0;
+  padding: 8px 12px; border-radius: 7px;
+  border: 1px solid var(--border); background: var(--bg2);
+  color: var(--text); font-size: 12px; font-family: monospace;
+  outline: none; transition: border-color .15s;
+}
+.pathInput:focus { border-color: var(--accent); }
+.pathInput::placeholder { color: var(--muted); opacity: .6; }
+
+.pathBtn {
+  padding: 8px 14px; border-radius: 7px;
+  border: 1px solid var(--border); background: var(--bg2);
+  color: var(--text); font-size: 12px; font-weight: 700;
+  font-family: inherit; cursor: pointer; white-space: nowrap;
+  transition: all .12s; flex-shrink: 0;
+}
+.pathBtn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.pathBtn:disabled { opacity: .4; cursor: not-allowed; }
+
+/* Mode toggle (connect / create) */
+.modeToggle {
+  display: flex; gap: 8px; margin-bottom: 0;
+}
+.modeBtn {
+  flex: 1; padding: 9px 0; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--bg2);
+  color: var(--muted); font-size: 13px; font-weight: 600;
+  font-family: inherit; cursor: pointer; transition: all .12s;
+}
+.modeBtnActive {
+  border-color: var(--accent); background: var(--surface);
+  color: var(--accent);
+}
+
+.modeBody {
+  margin-top: 12px;
+}
+
+/* Create new project form */
+.createForm {
+  display: flex; flex-direction: column;
+}
+.createLabel {
+  font-size: 11px; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .06em;
+  margin-bottom: 6px;
+}
+.createBtn {
+  margin-top: 14px;
+  width: 100%; padding: 10px; border-radius: 8px;
+  border: none; background: var(--accent); color: #fff;
+  font-size: 13px; font-weight: 700; font-family: inherit;
+  cursor: pointer; transition: opacity .15s;
+}
+.createBtn:disabled { opacity: .4; cursor: not-allowed; }
+.createBtn:not(:disabled):hover { opacity: .88; }
+
+/* Save button */
+.btn {
+  width: 100%; padding: 12px; border-radius: 8px;
+  border: none; background: var(--accent); color: #fff;
+  font-size: 14px; font-weight: 700; font-family: inherit;
+  cursor: pointer; transition: opacity .15s; margin-top: 24px;
+}
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn:not(:disabled):hover { opacity: .88; }

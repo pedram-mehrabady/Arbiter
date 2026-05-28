@@ -22,7 +22,11 @@ export type AgentRole =
   | 'report-formatter'
   | 'gate-poller'
   | 'surveyor'
-  | 'question';
+  | 'question'
+  | 'prd'
+  | 'push';
+
+export type PipelineName = 'standard' | 'fast';
 
 // ─── Task + sub-task state ────────────────────────────────────────────────────
 
@@ -163,6 +167,26 @@ export interface TemplateVarsConfig {
   PROJECT_CONVENTIONS?: string;
 }
 
+export interface NotificationsConfig {
+  webhook_url: string;
+  on_gate?: boolean;
+  on_complete?: boolean;
+  on_failure?: boolean;
+  secret?: string;
+}
+
+export interface GitAutoCommitConfig {
+  enabled: boolean;
+  author_name?: string;
+  author_email?: string;
+  message_template?: string;
+}
+
+export interface WatchConfig {
+  spec_dir: string;
+  poll_interval_ms?: number;
+}
+
 export interface FactoryConfig {
   auto_merge: boolean;
   roles: Record<string, AgentConfig>;
@@ -170,6 +194,9 @@ export interface FactoryConfig {
   gates?: GatesConfig;
   template_vars?: TemplateVarsConfig;
   complexity_cap?: number;
+  notifications?: NotificationsConfig;
+  git_auto_commit?: GitAutoCommitConfig;
+  watch?: WatchConfig;
 }
 
 // ─── Blast radius ─────────────────────────────────────────────────────────────

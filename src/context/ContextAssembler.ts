@@ -32,6 +32,8 @@ const AGENT_CONTEXT_MANIFESTS: Record<AgentRole, string[]> = {
   'gate-poller':     ['.arbiter/pending-gates.json'],
   'surveyor':        ['task.md', 'MASTER-DIRECTIVES.md'],
   'question':        ['task.md'],
+  'prd':             ['task.md'],
+  'push':            ['task.md', 'frontend-output.md', 'backend-output.md', 'test-writer-output.md'],
 };
 
 const SECTION_SEPARATOR = '\n\n' + '─'.repeat(60) + '\n\n';

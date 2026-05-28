@@ -36,7 +36,11 @@ describe('TaskInitializer', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.value.subTaskCount).toBe(11);
-    const stateRaw = await fs.readFile(path.join(root, '.arbiter', 'state.json'), 'utf-8');
+    // Per-task state lives at .arbiter/tasks/<taskId>/state.json
+    const stateRaw = await fs.readFile(
+      path.join(root, '.arbiter', 'tasks', 'feat-1', 'state.json'),
+      'utf-8',
+    );
     const state = JSON.parse(stateRaw);
     expect(state.task_id).toBe('feat-1');
     expect(Object.keys(state.sub_tasks)).toHaveLength(11);
@@ -62,11 +66,13 @@ describe('TaskInitializer', () => {
     expect(Object.keys(r.value.pipeline.reduce((a, s) => ({ ...a, [s.id]: s }), {}))).not.toContain('frontend');
   });
 
-  it('returns STATE_EXISTS when a different task already initialized', async () => {
+  it('allows multiple different tasks to coexist in the same workspace', async () => {
     await initializer.init({ taskId: 'feat-1', specFile, workspaceRoot: root });
     const r2 = await initializer.init({ taskId: 'feat-2', specFile, workspaceRoot: root });
-    expect(r2.ok).toBe(false);
-    if (!r2.ok) expect(r2.code).toBe('STATE_EXISTS');
+    // Per-task state isolation: each task has its own .arbiter/tasks/<id>/state.json
+    expect(r2.ok).toBe(true);
+    if (!r2.ok) return;
+    expect(r2.value.taskId).toBe('feat-2');
   });
 
   it('returns ALREADY_INIT when the same task id is used twice', async () => {

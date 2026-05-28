@@ -1,6 +1,6 @@
 {
   "name": "arbiter-pipeline",
-  "version": "0.1.1",
+  "version": "0.2.1",
   "description": "Deterministic multi-agent AI pipeline for structured feature delivery with ALC evidence generation",
   "keywords": [
     "ai",
@@ -14,7 +14,7 @@
   "author": "Arbiter Pipeline Contributors",
   "license": "MIT",
   "bin": {
-    "arbiter": "./dist/cli/index.js"
+    "arbiter": "dist/cli/index.js"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

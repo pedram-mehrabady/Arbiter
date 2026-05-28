@@ -3,6 +3,7 @@ import path from 'node:path';
 import { GateDefinition, GateStatus, ServiceResult } from '../types/index';
 import { GateType, GateRegistry } from './GateRegistry';
 import { DecisionLog } from '../decisions/DecisionLog';
+import type { WebhookNotifier } from '../notifications/WebhookNotifier';
 
 const GATES_FILE = path.join('.arbiter', 'pending-gates.json');
 const POLL_INTERVAL_MS = 5_000;
@@ -11,11 +12,16 @@ export class GatePoller {
   private readonly gatesPath: string;
   private readonly registry: GateRegistry;
   private readonly decisionLog: DecisionLog;
+  private notifier: WebhookNotifier | undefined;
 
   constructor(workspaceRoot: string, decisionLog: DecisionLog) {
     this.gatesPath = path.join(workspaceRoot, GATES_FILE);
     this.registry = new GateRegistry();
     this.decisionLog = decisionLog;
+  }
+
+  setNotifier(notifier: WebhookNotifier): void {
+    this.notifier = notifier;
   }
 
   async createGate(
@@ -53,6 +59,15 @@ export class GatePoller {
     console.log(`   Gate ID: ${gate.gate_id}`);
     console.log(`   Resolve: arbiter gate approve ${gate.gate_id}`);
     console.log(`            arbiter gate reject  ${gate.gate_id}`);
+
+    if (this.notifier) {
+      void this.notifier.notify('gate_created', {
+        task_id: taskId,
+        gate_id: gate.gate_id,
+        gate_type: gateType,
+        context: context.slice(0, 500),
+      });
+    }
 
     return { ok: true, value: gate };
   }

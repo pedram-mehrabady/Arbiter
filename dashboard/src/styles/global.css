@@ -1,0 +1,133 @@
+/* ── Pipeline Dashboard — light theme ── */
+
+:root {
+  --bg:        #f0f2f7;
+  --surface:   #ffffff;
+  --surface2:  #f8f9fc;
+  --bg2:       #f3f4f8;
+  --border:    #e2e5ee;
+  --text:      #111827;
+  --fg:        #111827;
+  --muted:     #6b7280;
+  --code-bg:   #f3f4f8;
+  --radius:    12px;
+  --radius-sm: 8px;
+
+  --accent:    #6366f1;
+  --auto:      #6366f1;
+  --auto-dim:  rgba(99,102,241,.10);
+  --auto-border: rgba(99,102,241,.30);
+
+  --green:     #16a34a;
+  --green-dim: rgba(22,163,74,.08);
+  --red:       #dc2626;
+
+  --user:      #d97706;
+  --user-dim:  rgba(217,119,6,.10);
+
+  /* surface tints */
+  --tint-hover:  rgba(0,0,0,.03);
+  --tint-active: rgba(99,102,241,.06);
+
+  --shadow-sm: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+  --shadow-md: 0 4px 12px rgba(0,0,0,.08), 0 2px 4px rgba(0,0,0,.04);
+  --shadow-lg: 0 12px 32px rgba(0,0,0,.12), 0 4px 8px rgba(0,0,0,.06);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ── Global modal system ─────────────────────────────────────────────────── */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 800;
+}
+
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  width: 560px;
+  max-width: 96vw;
+  max-height: 90vh;
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+}
+
+.modal-hdr {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 20px 22px 0;
+  gap: 12px;
+}
+
+.modal-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text);
+  margin-bottom: 3px;
+}
+
+.modal-sub {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+  max-width: 380px;
+}
+
+.modal-close {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  color: var(--muted);
+  padding: 4px 6px;
+  border-radius: 6px;
+  line-height: 1;
+  font-family: inherit;
+  transition: color .12s, background .12s;
+}
+.modal-close:hover { color: var(--text); background: var(--bg2); }
+
+/* ── Gate pending banners ────────────────────────────────────────────────── */
+
+.gate-pending-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.gate-pending-btn {
+  padding: 10px 16px;
+  background: var(--user-dim);
+  border: 1px solid var(--user);
+  border-radius: 8px;
+  color: var(--user);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background .15s;
+}
+.gate-pending-btn:hover { background: rgba(217,119,6,.18); }

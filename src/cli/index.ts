@@ -18,13 +18,16 @@ import { scanProject, formatProfile } from '../bootstrap/Scanner';
 import { runInterview, buildDefaultAnswers } from '../bootstrap/Interview';
 import { generateConfig } from '../bootstrap/ConfigGenerator';
 import { registerProject, listProjects } from '../bootstrap/ProjectRegistry';
+import { TaskArchiver } from '../task/TaskArchiver';
+
+import { SpecWatcher } from '../watch/SpecWatcher';
 
 const program = new Command();
 
 program
   .name('arbiter')
   .description('Deterministic multi-agent AI pipeline for structured feature delivery')
-  .version('0.1.0');
+  .version('0.2.1');
 
 // ─── arbiter init ─────────────────────────────────────────────────────────────
 
@@ -88,6 +91,8 @@ program
 
     console.log(`\n✓ arbiter.config.json written`);
     console.log(`  agents/docs/master-directives.md created`);
+    console.log(`  .arbiter/ directory created (with .gitkeep)`);
+    console.log(`  .gitignore updated with Arbiter runtime entries`);
     console.log(`  Project registered in ~/.arbiter/projects.json`);
     console.log(`\nNext steps:`);
     console.log(`  1. Create a task spec (e.g. my-feature-spec.md)`);
@@ -228,20 +233,44 @@ auditCmd
 // ─── arbiter status ───────────────────────────────────────────────────────────
 
 program
-  .command('status')
-  .description('Show pipeline status for current task')
+  .command('status [task-id]')
+  .description('Show pipeline status — all tasks if no id given, or a specific task')
   .option('--workspace <path>', 'Workspace root', process.cwd())
-  .action(async (opts: Record<string, string>) => {
+  .action(async (taskId: string | undefined, opts: Record<string, string>) => {
     const root = path.resolve(opts['workspace']);
-    const store = new StateStore(root);
-    const stateResult = await store.read();
-    if (!stateResult.ok) { console.error(stateResult.error); process.exit(1); }
 
-    const { task_id, phase_status, sub_tasks } = stateResult.value;
-    console.log(`Task: ${task_id}  Status: ${phase_status}`);
-    for (const [id, entry] of Object.entries(sub_tasks)) {
-      const strike = entry.strike ? ` (strike ${entry.strike})` : '';
-      console.log(`  ${entry.status.padEnd(12)} ${entry.agent_role.padEnd(16)} ${id}${strike}`);
+    if (taskId) {
+      const store = new StateStore(root, taskId);
+      const stateResult = await store.read();
+      if (!stateResult.ok) { console.error(stateResult.error); process.exit(1); }
+      const { task_id, phase_status, sub_tasks } = stateResult.value;
+      console.log(`Task: ${task_id}  Status: ${phase_status}`);
+      for (const [id, entry] of Object.entries(sub_tasks)) {
+        const strike = entry.strike ? ` (strike ${entry.strike})` : '';
+        console.log(`  ${entry.status.padEnd(12)} ${entry.agent_role.padEnd(16)} ${id}${strike}`);
+      }
+    } else {
+      const fsModule = await import('node:fs/promises');
+      const tasksDir = path.join(root, '.arbiter', 'tasks');
+      let taskIds: string[];
+      try {
+        const dirents = await fsModule.readdir(tasksDir, { withFileTypes: true });
+        taskIds = dirents.filter(d => d.isDirectory()).map(d => d.name);
+      } catch {
+        taskIds = [];
+      }
+      if (taskIds.length === 0) { console.log('No tasks found.'); return; }
+      for (const tid of taskIds) {
+        const store = new StateStore(root, tid);
+        const sr = await store.read();
+        if (sr.ok) {
+          const done = Object.values(sr.value.sub_tasks).filter(e => e.status === 'completed').length;
+          const total = Object.keys(sr.value.sub_tasks).length;
+          console.log(`  ${tid.padEnd(32)} [${sr.value.phase_status}]  ${done}/${total} sub-tasks`);
+        } else {
+          console.log(`  ${tid.padEnd(32)} [no state]`);
+        }
+      }
     }
   });
 
@@ -267,22 +296,52 @@ const taskCmd = program.command('task').description('Task lifecycle management')
 taskCmd
   .command('init <task-id>')
   .description('Initialise a new task from a spec file and write initial pipeline state')
-  .requiredOption('--spec <file>', 'Path to the feature spec file (markdown)')
+  .option('--spec <file>', 'Path to the feature spec file (markdown)')
+  .option('--template <name>', 'Start from a built-in spec template: new-feature, bug-fix, refactor, api-endpoint')
+  .option('--pipeline <name>', 'Pipeline to use: standard (11 agents, default) or fast (5 agents: prd, frontend, backend, test-writer, push)', 'standard')
   .option('--skip <agents>', 'Comma-separated agent roles to skip (e.g. frontend,tech-writer)')
   .option('--workspace <path>', 'Workspace root', process.cwd())
   .action(async (taskId: string, opts: Record<string, string>) => {
     const root = path.resolve(opts['workspace']);
+
+    // Resolve spec file — either from --spec or --template
+    let specFile: string;
+    if (opts['template']) {
+      const templateName = opts['template'];
+      const candidates = [
+        path.join(root, 'agents', 'templates', 'tasks', `${templateName}.md`),
+        path.join(__dirname, '..', '..', 'agents', 'templates', 'tasks', `${templateName}.md`),
+      ];
+      const found = candidates.find(c => {
+        try { require('node:fs').accessSync(c); return true; } catch { return false; }
+      });
+      if (!found) {
+        console.error(`Template "${templateName}" not found. Available: new-feature, bug-fix, refactor, api-endpoint`);
+        process.exit(1);
+      }
+      specFile = found;
+      console.log(`Using template: ${templateName}`);
+    } else if (opts['spec']) {
+      specFile = path.resolve(opts['spec']);
+    } else {
+      console.error('Error: provide --spec <file> or --template <name>');
+      process.exit(1);
+    }
+
     const initializer = new TaskInitializer(root);
 
     const skipAgents = opts['skip']
       ? opts['skip'].split(',').map(s => s.trim())
       : [];
 
+    const pipelineOpt = (opts['pipeline'] === 'fast' ? 'fast' : 'standard') as 'standard' | 'fast';
+
     const result = await initializer.init({
       taskId,
-      specFile: path.resolve(opts['spec']),
+      specFile,
       workspaceRoot: root,
       skipAgents: skipAgents as never[],
+      pipeline: pipelineOpt,
     });
 
     if (!result.ok) {
@@ -292,11 +351,11 @@ taskCmd
 
     const { taskDir, stateFile, subTaskCount, pipeline } = result.value;
 
-    console.log(`\nTask ${taskId} initialised`);
+    console.log(`\nTask ${taskId} initialised  [${pipelineOpt} pipeline]`);
     console.log(`  Spec copied to: ${taskDir}/task.md`);
     console.log(`  State file:     ${stateFile}`);
     console.log(`\nPipeline (${subTaskCount} sub-tasks):`);
-    console.log(TaskInitializer.describePipeline(skipAgents as never[]));
+    console.log(TaskInitializer.describePipeline(skipAgents as never[], pipelineOpt));
     console.log(`\nRun with:  arbiter conduct ${taskId} --workspace ${root}`);
     console.log(`Resume:    arbiter conduct ${taskId} --resume --workspace ${root}`);
 
@@ -307,32 +366,52 @@ taskCmd
   .command('list')
   .description('List all tasks initialised in this workspace')
   .option('--workspace <path>', 'Workspace root', process.cwd())
-  .action(async (opts: Record<string, string>) => {
-    const root = path.resolve(opts['workspace']);
+  .option('--archived', 'Include archived tasks', false)
+  .action(async (opts: Record<string, string | boolean>) => {
+    const root = path.resolve(opts['workspace'] as string);
+    const showArchived = Boolean(opts['archived']);
     const fsModule = await import('node:fs/promises');
     const tasksDir = path.join(root, '.arbiter', 'tasks');
-    let entries: string[];
+    let taskIds: string[];
     try {
       const dirents = await fsModule.readdir(tasksDir, { withFileTypes: true });
-      entries = dirents.filter(d => d.isDirectory()).map(d => d.name);
+      taskIds = dirents.filter(d => d.isDirectory()).map(d => d.name);
     } catch {
+      taskIds = [];
+    }
+
+    if (taskIds.length === 0 && !showArchived) {
       console.log('No tasks found (workspace not initialised or no tasks created yet).');
       return;
     }
-    if (entries.length === 0) { console.log('No tasks found.'); return; }
 
-    // Read state.json to annotate the active task with its status
-    const store = new StateStore(root);
-    const stateResult = await store.read();
-    const activeTaskId = stateResult.ok ? stateResult.value.task_id : null;
-    const activeStatus = stateResult.ok ? stateResult.value.phase_status : null;
+    if (taskIds.length > 0) {
+      console.log('Tasks:');
+      for (const tid of taskIds) {
+        const store = new StateStore(root, tid);
+        const sr = await store.read();
+        if (sr.ok) {
+          const done = Object.values(sr.value.sub_tasks).filter(e => e.status === 'completed').length;
+          const total = Object.keys(sr.value.sub_tasks).length;
+          console.log(`  ${tid.padEnd(32)} [${sr.value.phase_status}]  ${done}/${total} sub-tasks`);
+        } else {
+          console.log(`  ${tid.padEnd(32)} [no state]`);
+        }
+      }
+    }
 
-    entries.forEach(name => {
-      const isActive = name === activeTaskId;
-      const statusStr = isActive && activeStatus ? `  [${activeStatus}]` : '';
-      const marker = isActive ? ' *' : '';
-      console.log(`  ${name}${marker}${statusStr}`);
-    });
+    if (showArchived) {
+      const archiver = new TaskArchiver(root);
+      const archivedResult = await archiver.list();
+      if (archivedResult.ok && archivedResult.value.length > 0) {
+        console.log('\nArchived:');
+        archivedResult.value.forEach(m => {
+          console.log(`  ${m.task_id}  [${m.phase_status}]  archived: ${m.archived_at}`);
+        });
+      } else {
+        console.log('\nNo archived tasks.');
+      }
+    }
   });
 
 taskCmd
@@ -341,15 +420,11 @@ taskCmd
   .option('--workspace <path>', 'Workspace root', process.cwd())
   .action(async (taskId: string, opts: Record<string, string>) => {
     const root = path.resolve(opts['workspace']);
-    const store = new StateStore(root);
+    const store = new StateStore(root, taskId);
     const stateResult = await store.read();
     if (!stateResult.ok) { console.error(stateResult.error); process.exit(1); }
 
     const { task_id, phase_status, sub_tasks } = stateResult.value;
-    if (task_id !== taskId) {
-      console.error(`State is for task "${task_id}", not "${taskId}". Use \`arbiter status\` to see the current active task.`);
-      process.exit(1);
-    }
     console.log(`Task: ${task_id}  Status: ${phase_status}`);
     for (const [id, entry] of Object.entries(sub_tasks)) {
       const strike = entry.strike ? ` (strike ${entry.strike})` : '';
@@ -363,16 +438,11 @@ taskCmd
   .option('--workspace <path>', 'Workspace root', process.cwd())
   .action(async (taskId: string, opts: Record<string, string>) => {
     const root = path.resolve(opts['workspace']);
-    const store = new StateStore(root);
+    const store = new StateStore(root, taskId);
     const stateResult = await store.read();
     if (!stateResult.ok) { console.error(stateResult.error); process.exit(1); }
 
     const state = stateResult.value;
-    if (state.task_id !== taskId) {
-      console.error(`State is for task "${state.task_id}", not "${taskId}"`);
-      process.exit(1);
-    }
-
     for (const subTaskId of Object.keys(state.sub_tasks)) {
       await store.updateSubTask(subTaskId, {
         status: 'pending',
@@ -391,6 +461,48 @@ taskCmd
 
     console.log(`Task ${taskId}: all ${Object.keys(state.sub_tasks).length} sub-tasks reset to pending.`);
     if (clearedCount > 0) console.log(`Cleared ${clearedCount} stale gate entry/entries.`);
+  });
+
+taskCmd
+  .command('archive <task-id>')
+  .description('Archive the active task to free the workspace for a new task')
+  .option('--workspace <path>', 'Workspace root', process.cwd())
+  .action(async (taskId: string, opts: Record<string, string>) => {
+    const root = path.resolve(opts['workspace']);
+    const archiver = new TaskArchiver(root);
+    const result = await archiver.archive(taskId);
+    if (!result.ok) { console.error(`Error: ${result.error}`); process.exit(1); }
+    const { archived_at, phase_status, sub_task_count } = result.value;
+    console.log(`Task "${taskId}" archived.`);
+    console.log(`  Status: ${phase_status}  |  Sub-tasks: ${sub_task_count}  |  At: ${archived_at}`);
+    console.log(`  Restore with: arbiter task restore ${taskId}`);
+  });
+
+taskCmd
+  .command('restore <task-id>')
+  .description('Restore an archived task as the active task')
+  .option('--workspace <path>', 'Workspace root', process.cwd())
+  .action(async (taskId: string, opts: Record<string, string>) => {
+    const root = path.resolve(opts['workspace']);
+    const archiver = new TaskArchiver(root);
+    const result = await archiver.restore(taskId);
+    if (!result.ok) { console.error(`Error: ${result.error}`); process.exit(1); }
+    const { task_id, phase_status } = result.value;
+    console.log(`Task "${task_id}" restored as active task.`);
+    console.log(`  Status: ${phase_status}`);
+    console.log(`  Resume with: arbiter conduct ${task_id} --resume`);
+  });
+
+taskCmd
+  .command('templates')
+  .description('List built-in task spec templates')
+  .action(() => {
+    console.log('Built-in task spec templates:\n');
+    console.log('  new-feature   — General new feature spec');
+    console.log('  bug-fix       — Bug report and fix spec');
+    console.log('  refactor      — Code refactoring spec');
+    console.log('  api-endpoint  — New REST API endpoint spec');
+    console.log('\nUsage: arbiter task init <task-id> --template <name>');
   });
 
 // ─── arbiter queue ────────────────────────────────────────────────────────────
@@ -444,15 +556,11 @@ bundleCmd
   .option('--workspace <path>', 'Workspace root', process.cwd())
   .action(async (taskId: string, opts: Record<string, string>) => {
     const root = path.resolve(opts['workspace']);
-    const store = new StateStore(root);
+    const store = new StateStore(root, taskId);
     const stateResult = await store.read();
     if (!stateResult.ok) { console.error(stateResult.error); process.exit(1); }
 
-    const { task_id, phase_status, sub_tasks } = stateResult.value;
-    if (task_id !== taskId) {
-      console.error(`State is for task "${task_id}", not "${taskId}"`);
-      process.exit(1);
-    }
+    const { phase_status, sub_tasks } = stateResult.value;
 
     const pendingCount = Object.values(sub_tasks).filter(e => e.status !== 'completed').length;
     if (pendingCount > 0) {
@@ -533,15 +641,11 @@ preflightCmd
   .action(async (taskId: string, opts: Record<string, string>) => {
     const root = path.resolve(opts['workspace']);
     const taskDir = path.join(root, '.arbiter', 'tasks', taskId);
-    const store = new StateStore(root);
+    const store = new StateStore(root, taskId);
     const stateResult = await store.read();
     if (!stateResult.ok) { console.error(stateResult.error); process.exit(1); }
 
     const state = stateResult.value;
-    if (state.task_id !== taskId) {
-      console.error(`State is for task "${state.task_id}", not "${taskId}"`);
-      process.exit(1);
-    }
 
     const contextAssembler = new ContextAssembler(root);
     const contextPruner = new ContextPruner();
@@ -598,6 +702,41 @@ cacheCmd
     const result = await cache.invalidate(opts['module']);
     if (!result.ok) { console.error(result.error); process.exit(1); }
     console.log(`Invalidated ${result.value} evidence cache entry/entries.`);
+  });
+
+// ─── arbiter watch ────────────────────────────────────────────────────────────
+
+program
+  .command('watch')
+  .description('Watch a directory for new spec files and auto-conduct each as a task')
+  .option('--dir <path>', 'Directory to watch for spec files (default: ./specs)', './specs')
+  .option('--interval <ms>', 'Poll interval in milliseconds', '3000')
+  .option('--workspace <path>', 'Workspace root', process.cwd())
+  .action(async (opts: Record<string, string>) => {
+    const root = path.resolve(opts['workspace']);
+    const specDir = path.resolve(opts['dir']);
+    const pollIntervalMs = parseInt(opts['interval'], 10);
+
+    const watcher = new SpecWatcher({ specDir, workspaceRoot: root, pollIntervalMs });
+
+    process.on('SIGINT', () => { watcher.stop(); process.exit(0); });
+
+    await watcher.start(async (specFile, taskId) => {
+      const initializer = new TaskInitializer(root);
+      const initResult = await initializer.init({ taskId, specFile, workspaceRoot: root });
+      if (!initResult.ok) return initResult;
+
+      const conductor = new Conductor({
+        resume: false,
+        shadow: false,
+        dryRun: false,
+        workspaceRoot: root,
+        maxParallel: 1,
+      });
+      const result = await conductor.conduct(taskId);
+      if (!result.ok) return result;
+      return { ok: true, value: undefined };
+    });
   });
 
 program.parseAsync(process.argv).catch(err => {

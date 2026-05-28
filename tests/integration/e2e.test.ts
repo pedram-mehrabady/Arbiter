@@ -81,7 +81,7 @@ async function conductTask(root: string, taskId: string, resume = false): Promis
   const result = await conductor.conduct(taskId);
   if (!result.ok) {
     // Dump state and last 5 log entries for diagnosis
-    const store = new StateStore(root);
+    const store = new StateStore(root, taskId);
     const state = await store.read();
     const log = new DecisionLog(root);
     const logEntries = await log.readAll();
@@ -207,7 +207,7 @@ the upload percentage in real-time.
     expect(planInjected?.detail).toContain('frontend-dms-progress');
 
     // Generic placeholders should be gone; granular ids should be present
-    const store = new StateStore(root);
+    const store = new StateStore(root, taskId);
     const state = await store.read();
     expect(state.ok).toBe(true);
     if (!state.ok) return;
@@ -338,7 +338,7 @@ the upload percentage in real-time.
       expect(cacheEvents.length).toBeGreaterThan(0);
 
       // Design and design-critic should be marked completed via cache
-      const store = new StateStore(root2);
+      const store = new StateStore(root2, taskId2);
       const state = await store.read();
       expect(state.ok).toBe(true);
       if (!state.ok) return;
@@ -358,7 +358,7 @@ the upload percentage in real-time.
       await initTask(resumeRoot, resumeTaskId, spec);
 
       // Artificially mark a sub-task as in_progress (simulates SIGKILL mid-run)
-      const store = new StateStore(resumeRoot);
+      const store = new StateStore(resumeRoot, resumeTaskId);
       const stateResult = await store.read();
       expect(stateResult.ok).toBe(true);
       if (!stateResult.ok) return;

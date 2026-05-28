@@ -3,10 +3,10 @@ import { stdin as input, stdout as output } from 'node:process';
 import { ProjectProfile } from './Scanner';
 
 // Build answers from detected profile with no user input.
-export function buildDefaultAnswers(detected: ProjectProfile): InterviewAnswers {
+export function buildDefaultAnswers(detected: ProjectProfile, provider: InterviewAnswers['provider'] = 'claude_max_cli'): InterviewAnswers {
   return {
     projectName:   detected.name,
-    provider:      'claude_max_cli',
+    provider,
     providerModel: 'claude-sonnet-4-6',
     stackFrontend: detected.stackFrontend,
     stackBackend:  detected.stackBackend,
@@ -21,7 +21,7 @@ export function buildDefaultAnswers(detected: ProjectProfile): InterviewAnswers 
 
 export interface InterviewAnswers {
   projectName: string;
-  provider: 'claude_max_cli' | 'anthropic_sdk' | 'ollama';
+  provider: 'claude_max_cli' | 'anthropic_sdk' | 'openai' | 'gemini' | 'ollama';
   providerModel: string;
   stackFrontend: string;
   stackBackend: string;
@@ -58,14 +58,22 @@ export async function runInterview(detected: ProjectProfile): Promise<InterviewA
   console.log('\nProvider options:');
   console.log('  1) claude  — Claude Max CLI (recommended, requires `claude` in PATH)');
   console.log('  2) sdk     — Anthropic SDK (requires ANTHROPIC_API_KEY)');
-  console.log('  3) ollama  — Local Ollama (fully offline)');
-  const providerChoice = await ask('Provider [1/2/3]', '1');
+  console.log('  3) openai  — OpenAI (requires OPENAI_API_KEY)');
+  console.log('  4) gemini  — Google Gemini (requires GEMINI_API_KEY)');
+  console.log('  5) ollama  — Local Ollama (fully offline)');
+  const providerChoice = await ask('Provider [1/2/3/4/5]', '1');
   let provider: InterviewAnswers['provider'];
   let providerModel: string;
   if (providerChoice === '2') {
     provider = 'anthropic_sdk';
     providerModel = await ask('Default model', 'claude-sonnet-4-6');
   } else if (providerChoice === '3') {
+    provider = 'openai';
+    providerModel = await ask('OpenAI model', 'gpt-4o');
+  } else if (providerChoice === '4') {
+    provider = 'gemini';
+    providerModel = await ask('Gemini model', 'gemini-2.5-flash');
+  } else if (providerChoice === '5') {
     provider = 'ollama';
     providerModel = await ask('Ollama model', 'llama3');
   } else {

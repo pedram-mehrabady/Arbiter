@@ -1,0 +1,39 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-areas:
+    "quick  agents  stats   worklog"
+    "jobs   jobs    jobs    improvements"
+    "done   done    done    done";
+  gap: 16px;
+  align-items: start;
+}
+
+.areaQuick        { grid-area: quick; }
+.areaAgents       { grid-area: agents; }
+.areaStats        { grid-area: stats; }
+.areaWorklog      { grid-area: worklog; }
+.areaJobs         { grid-area: jobs; }
+.areaImprovements { grid-area: improvements; }
+.areaDone         { grid-area: done; }
+
+@media (max-width: 1100px) {
+  .grid {
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      "quick  agents"
+      "stats  worklog"
+      "jobs   jobs"
+      "improvements improvements"
+      "done   done";
+  }
+}
+
+@media (max-width: 640px) {
+  .grid {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "quick" "agents" "stats" "worklog"
+      "jobs" "improvements" "done";
+  }
+}
