@@ -29,7 +29,7 @@ function agentDocPath(template: 'full' | 'compact', agentKey: string, file: 'rul
   return `.arbiter/factory/${slug}/agents/${agentKey}/${file}`;
 }
 
-function buildTermCmd(agentModel: string, template: 'full' | 'compact', agentKey: string, os: string) {
+function buildTermCmd(agentModel: string, template: 'full' | 'compact', agentKey: string, os: string, repoPath?: string) {
   const slug = template === 'compact' ? 'speed' : 'full';
   const rbPath = `.arbiter/factory/${slug}/agents/${agentKey}/rulebook.md`;
   const mfPath = `.arbiter/factory/${slug}/agents/${agentKey}/manifest.md`;
@@ -37,9 +37,11 @@ function buildTermCmd(agentModel: string, template: 'full' | 'compact', agentKey
   if (os === 'win') {
     const rbWin = rbPath.replace(/\//g, '\\');
     const mfWin = mfPath.replace(/\//g, '\\');
-    return `claude --model ${agentModel} \`\n  --dangerously-skip-permissions \`\n  --system-prompt (Get-Content "${rbWin}") \`\n  -p (Get-Content "${mfWin}")`;
+    const cdPart = repoPath ? `cd "${repoPath}" && ` : '';
+    return `${cdPart}claude --model ${agentModel} \`\n  --system-prompt (Get-Content "${rbWin}") \`\n  --append-system-prompt (Get-Content "${mfWin}") \`\n  --add-dir .`;
   }
-  return `claude --model ${agentModel} \\\n  --dangerously-skip-permissions \\\n  --system-prompt "$(cat ${rbPath})" \\\n  -p "$(cat ${mfPath})"`;
+  const cdPart = repoPath ? `cd '${repoPath.replace(/'/g, "'\\''")}' && ` : '';
+  return `${cdPart}claude --model ${agentModel} \\\n  --system-prompt "$(cat ${rbPath})" \\\n  --append-system-prompt "$(cat ${mfPath})" \\\n  --add-dir .`;
 }
 
 function looksLikeFileContent(text: string): boolean {
@@ -80,7 +82,7 @@ export function AgentDocModal({
 
   const rbPath = agentDocPath(template, agentKey, 'rulebook.md');
   const mfPath = agentDocPath(template, agentKey, 'manifest.md');
-  const termCmd = buildTermCmd(agentModel, template, agentKey, os);
+  const termCmd = buildTermCmd(agentModel, template, agentKey, os, repoPath || undefined);
 
   // ── Load files on mount ───────────────────────────────────────────────────
 
@@ -174,11 +176,11 @@ export function AgentDocModal({
 
   const runAgent = useCallback(async () => {
     const platformOs = os === 'win' ? 'win' : 'mac';
-    // Use bash -c on mac, cmd /k on windows
+    // Flatten multi-line command into a single shell string, then open an
+    // interactive terminal window — the user can chat with the agent directly.
+    const flatCmd = termCmd.replace(/\\\n\s+/g, ' ');
     const cmd  = platformOs === 'win' ? 'cmd'  : 'bash';
-    const args = platformOs === 'win'
-      ? ['/k', termCmd.replace(/\\\n\s+/g, ' ')]
-      : ['-c', termCmd.replace(/\\\n\s+/g, ' ')];
+    const args = platformOs === 'win' ? ['/k', flatCmd] : ['-c', flatCmd];
     await fetch('/api/launch-agent', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -317,8 +319,10 @@ export function AgentDocModal({
                     </button>
                   </div>
                   <div className={css.terminalNote}>
-                    Opens a new terminal window and runs the agent using the manifest from{' '}
-                    <code>.arbiter/factory/{templateSlug}/agents/{agentKey}/</code>
+                    Opens an interactive Claude session loaded with this agent's rulebook
+                    (system prompt) + manifest (role context) + full project access via{' '}
+                    <code>--add-dir .</code> — ask it questions, paste a spec, or start a
+                    brainstorming session directly in the terminal.
                   </div>
                 </div>
               ) : !filesExist ? (
