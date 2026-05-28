@@ -105,4 +105,50 @@ describe('WorktreeManager', () => {
     if (!result.ok) return;
     expect(result.value).toHaveLength(0);
   });
+
+  it('merge returns error when not a git repo', async () => {
+    mockExecAsync.mockRejectedValueOnce(new Error('not a git repo'));
+
+    const mgr = makeManager('/workspace/myproject');
+    const result = await mgr.merge('FEAT-001', 'arbiter/FEAT-001');
+
+    expect(result.ok).toBe(false);
+  });
+
+  it('merge pushes the branch and opens a PR via gh, returning the PR url', async () => {
+    mockExecAsync
+      .mockResolvedValueOnce({ stdout: '.git', stderr: '' })  // isGitRepo
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })       // git add -A
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })       // git commit
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })       // git push
+      .mockResolvedValueOnce({ stdout: 'https://github.com/o/r/pull/42\n', stderr: '' }); // gh pr create
+
+    const mgr = makeManager('/workspace/myproject');
+    const result = await mgr.merge('FEAT-001', 'arbiter/FEAT-001');
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toBe('https://github.com/o/r/pull/42');
+
+    const ghCall = mockExecAsync.mock.calls[4];
+    expect(ghCall[0]).toBe('gh');
+    expect(ghCall[1]).toContain('pr');
+    expect(ghCall[1]).toContain('create');
+    expect(ghCall[1]).toContain('arbiter/FEAT-001');
+  });
+
+  it('merge reports push failure as ok:false (non-fatal to caller)', async () => {
+    mockExecAsync
+      .mockResolvedValueOnce({ stdout: '.git', stderr: '' })  // isGitRepo
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })       // git add -A
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })       // git commit
+      .mockRejectedValueOnce(new Error('no origin remote')); // git push fails
+
+    const mgr = makeManager('/workspace/myproject');
+    const result = await mgr.merge('FEAT-001', 'arbiter/FEAT-001');
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toContain('push');
+  });
 });

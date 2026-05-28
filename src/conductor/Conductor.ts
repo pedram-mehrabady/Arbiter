@@ -186,22 +186,53 @@ export class Conductor {
 
     // ── Iron Funnel: 5-gate quality check (Tier 2 and Tier 3) ────────────────
     if (taskTier >= 2 && this.config) {
-      const funnel = new IronFunnel(this.sqliteStore, this.provider, this.config, this.options.workspaceRoot);
-      const funnelResult = await funnel.run(taskId, this.options.workspaceRoot, { tier: taskTier });
+      // Isolate agent code writes in a per-task git worktree. When git is
+      // unavailable (e.g. test sandboxes) we fall back to the workspace root so
+      // the pipeline still runs — just without isolation or an auto-PR.
+      const branchName = `arbiter/${taskId}`;
+      const wt = await this.worktreeManager.create(taskId, branchName);
+      const isolated = wt.ok;
+      const worktreePath = wt.ok ? wt.value : this.options.workspaceRoot;
+      if (isolated) {
+        this.sqliteStore.appendEvent(taskId, 'worktree_created', { path: worktreePath, branch: branchName });
+      }
 
-      await this.decisionLog.append({
-        task_id: taskId,
-        event: 'iron_funnel_complete',
-        detail: `passed=${funnelResult.passed} gates=${funnelResult.gates.length} retries=${funnelResult.retryCount} failureGate=${funnelResult.failureGate ?? 'none'}`,
-      });
+      try {
+        const funnel = new IronFunnel(this.sqliteStore, this.provider, this.config, worktreePath);
+        const funnelResult = await funnel.run(taskId, worktreePath, { tier: taskTier });
 
-      if (!funnelResult.passed) {
-        this.sqliteStore.upsertTask({ task_id: taskId, status: 'failed' });
-        return {
-          ok: false,
-          error: `Iron Funnel failed at gate ${funnelResult.failureGate}. See DecisionLog for details.`,
-          code: 'IRON_FUNNEL_FAILED',
-        };
+        await this.decisionLog.append({
+          task_id: taskId,
+          event: 'iron_funnel_complete',
+          detail: `passed=${funnelResult.passed} gates=${funnelResult.gates.length} retries=${funnelResult.retryCount} failureGate=${funnelResult.failureGate ?? 'none'}`,
+        });
+
+        if (!funnelResult.passed) {
+          this.sqliteStore.upsertTask({ task_id: taskId, status: 'failed' });
+          return {
+            ok: false,
+            error: `Iron Funnel failed at gate ${funnelResult.failureGate}. See DecisionLog for details.`,
+            code: 'IRON_FUNNEL_FAILED',
+          };
+        }
+
+        // Gate 5 approved → push the worktree branch and open a PR (if isolated).
+        if (isolated) {
+          const pr = await this.worktreeManager.merge(taskId, branchName);
+          if (pr.ok) {
+            this.sqliteStore.appendEvent(taskId, 'pr_opened', { url: pr.value, branch: branchName });
+            await this.decisionLog.append({ task_id: taskId, event: 'pr_opened', detail: pr.value.slice(0, 300) });
+          } else {
+            this.sqliteStore.appendEvent(taskId, 'pr_open_failed', { error: pr.error, branch: branchName });
+            await this.decisionLog.append({ task_id: taskId, event: 'pr_open_failed', detail: pr.error.slice(0, 300) });
+          }
+        }
+      } finally {
+        // Clean up the worktree whether the funnel passed or failed; the branch
+        // (and any opened PR) persists on the remote.
+        if (isolated) {
+          await this.worktreeManager.delete(taskId).catch(() => { /* best-effort cleanup */ });
+        }
       }
     }
 

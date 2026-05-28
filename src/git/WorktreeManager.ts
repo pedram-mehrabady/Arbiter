@@ -61,6 +61,63 @@ export class WorktreeManager {
     return this.gitAutoCommit.commit(taskId, subTaskId, agentRole);
   }
 
+  /**
+   * Stage + commit any pending changes in the task's worktree, push the branch to
+   * origin, and open a PR via the `gh` CLI. Does NOT merge locally — the human (or
+   * CI) merges the PR. Returns the PR URL on success.
+   *
+   * Degrades gracefully: returns ok:false (non-fatal to the caller) when the repo
+   * isn't a git repo, has no `origin` remote, or `gh` is unavailable.
+   */
+  async merge(
+    taskId: string,
+    branchName: string,
+    opts: { title?: string; body?: string } = {},
+  ): Promise<ServiceResult<string>> {
+    const worktreePath = this.getPath(taskId);
+
+    const isRepo = await this.isGitRepo();
+    if (!isRepo) {
+      return { ok: false, error: 'Not a git repository — cannot open PR' };
+    }
+
+    try {
+      // Commit anything the agents wrote in the worktree (no-op commit is tolerated).
+      await execFileAsync('git', ['-C', worktreePath, 'add', '-A'], { timeout: 15_000 });
+      await execFileAsync(
+        'git',
+        ['-C', worktreePath, 'commit', '-m', `arbiter: ${taskId} (Iron Funnel approved)`],
+        { timeout: 15_000 },
+      ).catch(() => { /* nothing to commit — fine */ });
+
+      // Push the branch (requires an 'origin' remote).
+      await execFileAsync(
+        'git',
+        ['-C', worktreePath, 'push', '-u', 'origin', branchName],
+        { timeout: 60_000 },
+      );
+    } catch (err) {
+      return { ok: false, error: `git push failed: ${String(err)}` };
+    }
+
+    // Open the PR via gh. Push succeeded; a gh failure is reported but non-fatal.
+    try {
+      const { stdout } = await execFileAsync(
+        'gh',
+        [
+          'pr', 'create',
+          '--head', branchName,
+          '--title', opts.title ?? `Arbiter: ${taskId}`,
+          '--body', opts.body ?? `Automated PR for task ${taskId}. All Iron Funnel gates passed.`,
+        ],
+        { cwd: worktreePath, timeout: 60_000 },
+      );
+      return { ok: true, value: stdout.trim() };
+    } catch (err) {
+      return { ok: false, error: `branch pushed but gh pr create failed: ${String(err)}` };
+    }
+  }
+
   async listActive(): Promise<ServiceResult<string[]>> {
     const isRepo = await this.isGitRepo();
     if (!isRepo) return { ok: true, value: [] };
