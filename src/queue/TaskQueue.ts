@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { TaskState, SubTaskEntry, ServiceResult } from '../types/index';
 
-const QUEUE_FILE = path.join('.arbiter', 'queue.json');
+const QUEUE_FILE = path.join('arbiter', 'queue.json');
 
 export interface QueuedTask {
   task_id: string;

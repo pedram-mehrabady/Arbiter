@@ -1,0 +1,18 @@
+agent: backend
+pipeline: speed
+always:
+  - agents/templates-speed/backend.md
+  - engine/MASTER-DIRECTIVES.md
+  - agents/knowledge/backend-standards.md
+  - agents/knowledge/reliability.md
+  - agents/knowledge/security.md
+  - tasks/backend.task.md
+  - 3-design.md
+  - 5-plan.json
+  - "{{WORKSPACE_BE_CLAUDE}}"
+on_demand:
+  - "{{WORKSPACE_BE}}/**"
+never:
+  - "{{WORKSPACE_FE}}/**"
+  - agents/templates-speed/frontend.md
+  - agents/templates/

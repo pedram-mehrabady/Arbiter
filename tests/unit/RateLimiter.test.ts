@@ -38,9 +38,9 @@ describe('RateLimiter', () => {
       expect(second.value.total_cost_today_usd).toBeGreaterThan(second.value.cost_usd);
     });
 
-    it('writes to .arbiter/usage.jsonl', async () => {
+    it('writes to arbiter/usage.jsonl', async () => {
       await limiter.record('TASK-1', 'reframe', 'reframe', 'claude-sonnet-4-6', 1000, 500);
-      const content = await fs.readFile(path.join(root, '.arbiter', 'usage.jsonl'), 'utf-8');
+      const content = await fs.readFile(path.join(root, 'arbiter', 'usage.jsonl'), 'utf-8');
       const lines = content.trim().split('\n').filter(Boolean);
       expect(lines.length).toBe(1);
       const entry = JSON.parse(lines[0]);

@@ -1,0 +1,12 @@
+agent: debugger
+always:
+  - agents/templates/debugger.md
+  - engine/MASTER-DIRECTIVES.md
+  - .arbiter/error-logs/<task>
+  - tasks/<task>.task.md
+on_demand:
+  - .arbiter/vision/<task>/*.png
+  - agents/knowledge/frontend-standards.md
+  - agents/knowledge/backend-standards.md
+  - agents/knowledge/reliability.md
+  - agents/knowledge/security.md

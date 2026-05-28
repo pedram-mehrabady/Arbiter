@@ -112,8 +112,8 @@ export async function generateConfig(
     'utf-8',
   );
 
-  // Create .arbiter/ directory with .gitkeep so git tracks it
-  const arbiterDir = path.join(workspaceRoot, '.arbiter');
+  // Create arbiter/ directory with .gitkeep so git tracks it
+  const arbiterDir = path.join(workspaceRoot, 'arbiter');
   await fs.mkdir(arbiterDir, { recursive: true });
   const gitkeepPath = path.join(arbiterDir, '.gitkeep');
   try { await fs.access(gitkeepPath); } catch { await fs.writeFile(gitkeepPath, '', 'utf-8'); }
@@ -126,24 +126,24 @@ export async function generateConfig(
 
 const ARBITER_GITIGNORE_BLOCK = `
 # Arbiter runtime — do not commit
-.arbiter/state.json
-.arbiter/decision-log.jsonl
-.arbiter/receipts.jsonl
-.arbiter/usage.jsonl
-.arbiter/pending-gates.json
-.arbiter/evidence-cache.json
-.arbiter/bundles/
-.arbiter/signing-key.pem
-.arbiter/signing-key-pub.pem
+arbiter/state.json
+arbiter/decision-log.jsonl
+arbiter/receipts.jsonl
+arbiter/usage.jsonl
+arbiter/pending-gates.json
+arbiter/evidence-cache.json
+arbiter/bundles/
+arbiter/signing-key.pem
+arbiter/signing-key-pub.pem
 # Keep the directory marker and task outputs
-!.arbiter/.gitkeep
+!arbiter/.gitkeep
 `;
 
 async function appendGitignore(workspaceRoot: string): Promise<void> {
   const gitignorePath = path.join(workspaceRoot, '.gitignore');
   let existing = '';
   try { existing = await fs.readFile(gitignorePath, 'utf-8'); } catch { /* will create it */ }
-  if (existing.includes('.arbiter/state.json')) return;
+  if (existing.includes('arbiter/state.json')) return;
   await fs.writeFile(gitignorePath, existing + ARBITER_GITIGNORE_BLOCK, 'utf-8');
 }
 

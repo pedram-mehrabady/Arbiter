@@ -13,6 +13,7 @@ import {
   BuildReceipt,
 } from '../types/index';
 import { StateStore } from '../state/StateStore';
+import { SqliteStore } from '../state/SqliteStore';
 import { DecisionLog } from '../decisions/DecisionLog';
 import { FailureClassifier } from '../classifiers/FailureClassifier';
 import { PreflightCheck } from '../preflight/PreflightCheck';
@@ -36,6 +37,14 @@ import { OpenAIProvider } from '../providers/OpenAIProvider';
 import { GeminiProvider } from '../providers/GeminiProvider';
 import { WebhookNotifier } from '../notifications/WebhookNotifier';
 import { GitAutoCommit } from '../git/GitAutoCommit';
+import { WorktreeManager } from '../git/WorktreeManager';
+import { TriageRunner } from '../triage/TriageRunner';
+import { IronFunnel } from './IronFunnel';
+import { ContractValidator } from '../contracts/ContractValidator';
+import { OrchestratorDispatcher } from '../orchestrator/OrchestratorDispatcher';
+import { WebhookReceiver } from '../webhooks/WebhookReceiver';
+import { CiResultHandler } from '../webhooks/CiResultHandler';
+import { PrCommentHandler } from '../webhooks/PrCommentHandler';
 
 const CONFIG_FILE = 'arbiter.config.json';
 const FALLBACK_CONFIG_FILE = 'factory-config.json';
@@ -49,6 +58,7 @@ interface SubTaskRunResult {
 
 export class Conductor {
   private stateStore: StateStore;
+  readonly sqliteStore: SqliteStore;
   private readonly decisionLog: DecisionLog;
   private readonly failureClassifier = new FailureClassifier();
   private readonly preflight: PreflightCheck;
@@ -67,11 +77,13 @@ export class Conductor {
   private readonly options: ConductOptions;
   private notifier: WebhookNotifier | undefined;
   private gitAutoCommit: GitAutoCommit | undefined;
+  readonly worktreeManager: WorktreeManager;
 
   constructor(options: ConductOptions) {
     this.options = options;
     const root = options.workspaceRoot;
     this.stateStore = new StateStore(root);
+    this.sqliteStore = new SqliteStore(root);
     this.decisionLog = new DecisionLog(root);
     this.preflight = new PreflightCheck();
     this.receipts = new BuildReceiptStore(root);
@@ -81,6 +93,9 @@ export class Conductor {
     this.bundleAssembler = new BundleAssembler(root);
     this.evidenceCache = new EvidenceCache(root);
     this.provider = (options.provider as LLMProvider | undefined) ?? new AnthropicProvider();
+    const autoCommitConfig = { enabled: true };
+    this.gitAutoCommit = new GitAutoCommit(root, autoCommitConfig);
+    this.worktreeManager = new WorktreeManager(root, this.gitAutoCommit);
   }
 
   async conduct(taskId: string): Promise<ServiceResult<ConductSummary>> {
@@ -91,6 +106,11 @@ export class Conductor {
     if (!configResult.ok) return configResult;
 
     await this.receipts.ensureSigningKey();
+
+    // Start webhook receiver if --webhooks flag is set
+    if (this.options.webhooks && this.config) {
+      await this.startWebhookReceiver(taskId);
+    }
 
     const stateResult = await this.stateStore.read();
     if (!stateResult.ok) {
@@ -114,7 +134,7 @@ export class Conductor {
       if (hasProgress) {
         return {
           ok: false,
-          error: `Task ${taskId} has existing progress. Use --resume to continue, or delete .arbiter/state.json to restart.`,
+          error: `Task ${taskId} has existing progress. Use --resume to continue, or delete arbiter/state.json to restart.`,
           code: 'USE_RESUME',
         };
       }
@@ -126,8 +146,78 @@ export class Conductor {
       detail: `maxParallel=${this.options.maxParallel} shadow=${this.options.shadow}`,
     });
 
+    // ── Triage: classify task tier before dispatching any agent ──────────────
+    let taskTier: 1 | 2 | 3 = 3;
+
+    if (!this.options.resume) {
+      const taskMdPath = path.join(this.options.workspaceRoot, 'arbiter', 'tasks', taskId, 'task.md');
+      const triage = new TriageRunner(this.options.workspaceRoot, this.provider);
+      const triageResult = await triage.run(taskId, taskMdPath);
+      taskTier = (triageResult.ok ? triageResult.value.tier : 3) as 1 | 2 | 3;
+      const profile = triageResult.ok ? triageResult.value.profile : 'unknown';
+
+      this.sqliteStore.upsertTask({
+        task_id: taskId,
+        tier: taskTier,
+        pipeline: taskTier === 1 ? 'speed' : taskTier === 2 ? 'speed' : 'full',
+        profile,
+        status: 'building',
+      });
+      this.sqliteStore.appendEvent(taskId, 'triage_complete', {
+        tier: taskTier,
+        profile,
+        reason: triageResult.ok ? triageResult.value.reason : 'fallback',
+      });
+
+      await this.decisionLog.append({
+        task_id: taskId,
+        event: 'triage_complete',
+        detail: `tier=${taskTier} profile=${profile}`,
+      });
+
+      // Tier 2: run Investigator before the main loop
+      if (taskTier === 2) {
+        await this.runInvestigator(taskId);
+      }
+    }
+
     const loopResult = await this.runLoop(state);
     if (!loopResult.ok) return loopResult;
+
+    // ── Iron Funnel: 5-gate quality check (Tier 2 and Tier 3) ────────────────
+    if (taskTier >= 2 && this.config) {
+      const funnel = new IronFunnel(this.sqliteStore, this.provider, this.config, this.options.workspaceRoot);
+      const funnelResult = await funnel.run(taskId, this.options.workspaceRoot, { tier: taskTier });
+
+      await this.decisionLog.append({
+        task_id: taskId,
+        event: 'iron_funnel_complete',
+        detail: `passed=${funnelResult.passed} gates=${funnelResult.gates.length} retries=${funnelResult.retryCount} failureGate=${funnelResult.failureGate ?? 'none'}`,
+      });
+
+      if (!funnelResult.passed) {
+        this.sqliteStore.upsertTask({ task_id: taskId, status: 'failed' });
+        return {
+          ok: false,
+          error: `Iron Funnel failed at gate ${funnelResult.failureGate}. See DecisionLog for details.`,
+          code: 'IRON_FUNNEL_FAILED',
+        };
+      }
+    }
+
+    // ── Orchestrator: task_complete notification ──────────────────────────────
+    if (this.config) {
+      const orchestratorModel = this.config.roles?.['orchestrator']?.model ?? 'claude-opus-4-7';
+      const orchestrator = new OrchestratorDispatcher(
+        this.sqliteStore,
+        this.provider,
+        this.options.workspaceRoot,
+        orchestratorModel,
+      );
+      await orchestrator.wake(taskId, 'task_complete', { taskId }).catch(() => {
+        // Non-fatal — orchestrator lessons capture is best-effort
+      });
+    }
 
     const elapsedMs = Date.now() - startMs;
     const totalCostUsd = await this.rateLimiter.getTodayTotal();
@@ -227,6 +317,129 @@ export class Conductor {
     }
 
     return true;
+  }
+
+  // ── Phase 04: Contract validation for Tier 3 tasks ───────────────────────
+  private async runContractValidation(taskId: string, taskDir: string): Promise<void> {
+    const validator = new ContractValidator();
+    const result = await validator.run(taskDir);
+
+    if (result.passed) {
+      this.sqliteStore.upsertTask({ task_id: taskId, status: 'building' });
+      this.sqliteStore.appendEvent(taskId, 'contracts_locked', { locked: true });
+      await this.decisionLog.append({
+        task_id: taskId,
+        event: 'contracts_locked',
+        detail: 'All contract files validated and locked',
+      });
+    } else {
+      const errorSummary = result.errors.map(e => `${e.file}: ${e.error}`).join('\n');
+      this.sqliteStore.appendEvent(taskId, 'contract_validation_failed', {
+        errors: result.errors,
+      });
+      await this.decisionLog.append({
+        task_id: taskId,
+        event: 'contract_validation_failed',
+        detail: errorSummary.slice(0, 500),
+      });
+    }
+  }
+
+  // ── Phase 06: Webhook receiver ───────────────────────────────────────────
+  private async startWebhookReceiver(taskId: string): Promise<void> {
+    const cfg = this.config as (typeof this.config) & {
+      webhook_receiver?: { secret?: string; enabled?: boolean };
+    };
+    const secret = cfg?.webhook_receiver?.secret ?? '';
+
+    const ciHandler = new CiResultHandler(
+      this.sqliteStore,
+      this.provider,
+      this.options.workspaceRoot,
+      this.config?.roles?.['orchestrator']?.model ?? 'claude-opus-4-7',
+    );
+    const prHandler = new PrCommentHandler(
+      this.sqliteStore,
+      this.provider,
+      this.options.workspaceRoot,
+      this.config?.roles?.['orchestrator']?.model ?? 'claude-opus-4-7',
+    );
+
+    const receiver = new WebhookReceiver(this.sqliteStore, secret, {
+      onCiResult: (id, conclusion, prUrl, runUrl) =>
+        ciHandler.handle(id || taskId, conclusion, prUrl, runUrl),
+      onPrComment: (id, comment, prNumber, author, isReview) =>
+        prHandler.handle(id || taskId, comment, prNumber, author, isReview),
+    });
+
+    try {
+      await receiver.start();
+      console.log(`  ✓ Webhook receiver started on port 7475`);
+    } catch (err) {
+      console.warn(`  ⚠ Webhook receiver failed to start: ${String(err)}`);
+    }
+  }
+
+  // ── Tier 2: Investigator dispatch ──────────────────────────────────────────
+  private async runInvestigator(taskId: string): Promise<void> {
+    if (!this.config) return;
+
+    const taskMdPath = path.join(this.options.workspaceRoot, 'arbiter', 'tasks', taskId, 'task.md');
+    const rulesPath = path.join(this.options.workspaceRoot, 'agents', 'investigator', 'rules.md');
+
+    let taskContent = '';
+    let rulesContent = '';
+    try {
+      taskContent = await fs.readFile(taskMdPath, 'utf-8');
+    } catch { /* task.md may not exist — safe fallback */ }
+    try {
+      rulesContent = await fs.readFile(rulesPath, 'utf-8');
+    } catch { /* rules.md may not exist yet — safe fallback */ }
+
+    const prompt = [
+      rulesContent,
+      '',
+      '## Task',
+      taskContent,
+    ].join('\n');
+
+    const investigatorModel = this.config.roles?.['investigator']?.model ?? 'claude-sonnet-4-6';
+
+    const result = await this.provider.invoke({
+      model: investigatorModel,
+      assembledPrompt: prompt,
+      maxTokens: 2048,
+      timeoutMs: 120_000,
+      agentRole: 'investigator',
+    });
+
+    const outputDir = path.join(this.options.workspaceRoot, 'arbiter', 'tasks', taskId);
+    const fixStrategyPath = path.join(outputDir, 'fix-strategy.md');
+
+    if (result.ok && result.value.exitCode === 0) {
+      try {
+        await fs.mkdir(outputDir, { recursive: true });
+        await fs.writeFile(fixStrategyPath, result.value.content, 'utf-8');
+      } catch { /* Non-fatal */ }
+    }
+
+    this.sqliteStore.appendEvent(taskId, 'investigator_complete', {
+      success: result.ok,
+      fixStrategyWritten: result.ok,
+    });
+
+    // Check if contract mutation required → re-classify to Tier 3 (logged only; loop handles full pipeline)
+    if (result.ok) {
+      const contractMutationMatch = result.value.content.match(/Contract Mutation Required\s*\n+\s*(yes)/i);
+      if (contractMutationMatch) {
+        this.sqliteStore.upsertTask({ task_id: taskId, tier: 3, pipeline: 'full' });
+        await this.decisionLog.append({
+          task_id: taskId,
+          event: 'tier_reclassified',
+          detail: 'Investigator detected contract mutation required — reclassified to Tier 3',
+        });
+      }
+    }
   }
 
   private async runLoop(state: TaskState): Promise<ServiceResult<{ bundlePath?: string }>> {
@@ -354,7 +567,7 @@ export class Conductor {
   ): Promise<SubTaskRunResult> {
     const agentRole = entry.agent_role;
     const model = this.resolveModel(agentRole);
-    const taskDir = path.join(this.options.workspaceRoot, '.arbiter', 'tasks', taskId);
+    const taskDir = path.join(this.options.workspaceRoot, 'arbiter', 'tasks', taskId);
 
     // Mark in_progress
     await this.stateStore.updateSubTask(subTaskId, { status: 'in_progress', model });
@@ -495,6 +708,12 @@ export class Conductor {
     // P1-7: After design-critic completes, write this run's design to the evidence cache.
     if (agentRole === 'design-critic' && receiptId) {
       await this.storeDesignToCache(taskId, taskDir, receiptId);
+
+      // Phase 04: For Tier 3 tasks, validate contract files generated by Design agent
+      const taskRow = this.sqliteStore.getTask(taskId);
+      if (taskRow?.tier === 3 && this.config) {
+        await this.runContractValidation(taskId, taskDir);
+      }
     }
 
     // Check if a gate should fire after this agent
@@ -765,7 +984,7 @@ export class Conductor {
     entry: SubTaskEntry,
     originalOutputFile: string,
   ): Promise<SubTaskRunResult> {
-    const taskDir = path.join(this.options.workspaceRoot, '.arbiter', 'tasks', taskId);
+    const taskDir = path.join(this.options.workspaceRoot, 'arbiter', 'tasks', taskId);
     const debuggerModel = this.resolveModel('debugger');
 
     await this.decisionLog.append({
@@ -940,7 +1159,7 @@ export class Conductor {
     if (shouldEscalateToDebugger) {
       // P1-5: actual debugger escalation with four pipeline constraints
       await this.stateStore.updateSubTask(subTaskId, { strike: newStrike, last_failure_class: fc });
-      const taskDir = path.join(this.options.workspaceRoot, '.arbiter', 'tasks', taskId);
+      const taskDir = path.join(this.options.workspaceRoot, 'arbiter', 'tasks', taskId);
       const originalOutputFile = path.join(taskDir, `${subTaskId}-output.md`);
       return this.runDebuggerAgent(taskId, subTaskId, entry, originalOutputFile);
     }

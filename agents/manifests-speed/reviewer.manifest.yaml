@@ -1,0 +1,15 @@
+agent: reviewer
+pipeline: speed
+always:
+  - agents/templates-speed/reviewer.md
+  - engine/MASTER-DIRECTIVES.md
+  - 3-design.md
+  - 5-plan.json
+  - agents/knowledge/quality-score.md
+  - agents/knowledge/security.md
+  - "{{SECURITY_DOC}}"
+  - .arbiter/registry.json
+on_demand:
+  - "{{COMPLIANCE_DOC}}"
+never:
+  - agents/templates/

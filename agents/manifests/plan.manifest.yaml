@@ -1,0 +1,10 @@
+agent: plan
+always:
+  - agents/templates/plan.md
+  - engine/MASTER-DIRECTIVES.md
+  - 3-design.md
+  - integration.md
+  - agents/knowledge/plans.md
+  - engine/TASK-ARCHETYPES.md
+on_demand:
+  - 2-research.md

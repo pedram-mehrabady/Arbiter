@@ -42,7 +42,7 @@ export class EvidenceCache {
   private readonly cacheDir: string;
 
   constructor(workspaceRoot: string) {
-    this.cacheDir = path.join(workspaceRoot, '.arbiter', 'evidence-cache', 'design');
+    this.cacheDir = path.join(workspaceRoot, 'arbiter', 'evidence-cache', 'design');
   }
 
   // ── Cache lookup ─────────────────────────────────────────────────────────

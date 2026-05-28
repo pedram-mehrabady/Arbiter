@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { TaskState, SubTaskEntry, ServiceResult } from '../types/index';
 
-const LEGACY_STATE_FILE = path.join('.arbiter', 'state.json');
+const LEGACY_STATE_FILE = path.join('arbiter', 'state.json');
 
 export class StateStore {
   readonly filePath: string;
@@ -10,7 +10,7 @@ export class StateStore {
   constructor(workspaceRoot: string, taskId?: string) {
     // Per-task path when taskId provided; legacy single-file path otherwise.
     this.filePath = taskId
-      ? path.join(workspaceRoot, '.arbiter', 'tasks', taskId, 'state.json')
+      ? path.join(workspaceRoot, 'arbiter', 'tasks', taskId, 'state.json')
       : path.join(workspaceRoot, LEGACY_STATE_FILE);
   }
 

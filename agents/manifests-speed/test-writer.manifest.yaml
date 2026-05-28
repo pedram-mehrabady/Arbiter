@@ -1,0 +1,14 @@
+agent: test-writer
+pipeline: speed
+always:
+  - agents/templates-speed/test-writer.md
+  - engine/MASTER-DIRECTIVES.md
+  - agents/knowledge/quality-score.md
+  - agents/knowledge/test-patterns.md
+  - tasks/test-writer.task.md
+  - "{{FE_COVERAGE_CONFIG}}"
+  - "{{BE_COVERAGE_CONFIG}}"
+on_demand:
+  - engine/CLI-LESSONS-LEARNED.md
+never:
+  - agents/templates/

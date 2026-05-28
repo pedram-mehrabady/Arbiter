@@ -1,6 +1,7 @@
+import { useState, useEffect } from 'react';
 import { useAppStore } from '../../../store/useAppStore';
 import { useShallow } from 'zustand/react/shallow';
-import type { Job } from '../../../api/types';
+import type { Job, TaskTier, IronFunnelStatus, CriticalPathFlag } from '../../../api/types';
 import styles from './JobCard.module.css';
 
 interface Stage { key: string; label: string; emoji: string; type: 'main' | 'gate' | 'final'; detailKey: string; }
@@ -60,6 +61,13 @@ function fmtDur(s: number) {
   return Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm';
 }
 
+function fmtMs(ms?: number | null): string {
+  if (!ms || ms <= 0) return '';
+  if (ms < 1000) return `${ms}ms`;
+  if (ms < 60_000) return `${(Math.round(ms / 100) / 10)}s`;
+  return `${Math.floor(ms / 60_000)}m`;
+}
+
 const STATUS_CLASSES: Record<string, string> = {
   planned: 'st-planned', 'plan-ready': 'st-plan-ready', queued: 'st-queued',
   building: 'st-building', paused: 'st-paused', done: 'st-done',
@@ -73,11 +81,38 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export function JobCard({ job }: { job: Job }) {
-  const { expandedJobs, toggleJobExpand, openJobDetail } = useAppStore(useShallow((s) => ({
+  const { expandedJobs, toggleJobExpand, openJobDetail, liveApi } = useAppStore(useShallow((s) => ({
     expandedJobs:    s.expandedJobs,
     toggleJobExpand: s.toggleJobExpand,
     openJobDetail:   s.openJobDetail,
+    liveApi:         s.liveApi,
   })));
+
+  const [tier, setTier] = useState<TaskTier | null>(null);
+  const [ironFunnel, setIronFunnel] = useState<IronFunnelStatus | null>(null);
+  const [criticalPath, setCriticalPath] = useState<CriticalPathFlag | null>(null);
+
+  useEffect(() => {
+    if (!liveApi) return;
+    const api = liveApi as unknown as {
+      readTaskTier?: (id: string) => Promise<TaskTier | null>;
+      readIronFunnelStatus?: (id: string) => Promise<IronFunnelStatus | null>;
+      readCriticalPathFlag?: (id: string) => Promise<CriticalPathFlag | null>;
+    };
+    if (typeof api.readTaskTier !== 'function') return;
+    let cancelled = false;
+    Promise.all([
+      api.readTaskTier(job.id),
+      api.readIronFunnelStatus?.(job.id) ?? Promise.resolve(null),
+      api.readCriticalPathFlag?.(job.id) ?? Promise.resolve(null),
+    ]).then(([t, f, c]) => {
+      if (cancelled) return;
+      setTier(t ?? null);
+      setIronFunnel(f ?? null);
+      setCriticalPath(c ?? null);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [liveApi, job.id]);
 
   const isExpanded = (expandedJobs instanceof Set) && expandedJobs.has(job.id);
   const isDone = ['done', 'shipped', 'merged'].includes(job.status);
@@ -101,6 +136,9 @@ export function JobCard({ job }: { job: Job }) {
     if (idx >= 0) reworkCounts[idx] = (reworkCounts[idx] ?? 0) + 1;
   }
 
+  const TIER_LABELS: Record<number, string> = { 1: 'T1', 2: 'T2', 3: 'T3' };
+  const TIER_STYLE_KEYS: Record<number, string> = { 1: styles.tier1, 2: styles.tier2, 3: styles.tier3 };
+
   return (
     <div className={`${styles.card}${isFailed ? ' ' + styles.failedCard : isDone ? ' ' + styles.doneCard : job.status === 'building' ? ' ' + styles.buildingCard : ''}`}>
       <div className={styles.hdr} onClick={() => toggleJobExpand(job.id)} style={{ cursor: 'pointer' }}>
@@ -112,8 +150,19 @@ export function JobCard({ job }: { job: Job }) {
           <a className={styles.prBtn} href={job.pr_url} target="_blank" rel="noopener" onClick={(e) => e.stopPropagation()}>Open PR ↗</a>
         )}
         {isDone && !job.pr_url && <span className={styles.mergedLabel}>✓ Merged</span>}
+        {tier && (
+          <span className={`${styles.tierBadge} ${TIER_STYLE_KEYS[tier.tier] ?? ''}`} title={`Tier ${tier.tier} — ${tier.profile}`}>
+            {TIER_LABELS[tier.tier]}
+          </span>
+        )}
         <span className={styles.expandIcon}>{isExpanded ? '▲' : '▼'}</span>
       </div>
+
+      {criticalPath?.isCriticalPath && (
+        <div className={styles.criticalBanner}>
+          ⚠ CRITICAL PATH — blocking {criticalPath.blockingCount} {criticalPath.blockingCount === 1 ? 'task' : 'tasks'}
+        </div>
+      )}
 
       <div className={styles.pipeline}>
         {STAGES.map((stage, i) => {
@@ -155,6 +204,36 @@ export function JobCard({ job }: { job: Job }) {
 
       {isExpanded && (
         <div className={styles.detailPanel}>
+          {ironFunnel && (
+            <div className={styles.ironFunnel}>
+              <div className={styles.ironFunnelLabel}>IRON FUNNEL</div>
+              <div className={styles.ironFunnelGates}>
+                {ironFunnel.gates.map((gate, i) => {
+                  const statusKey = gate.status === 'passed' ? styles.gatePassed :
+                    gate.status === 'failed' ? styles.gateFailed :
+                    gate.status === 'running' ? styles.gateRunning :
+                    gate.status === 'skipped' ? styles.gateSkipped : styles.gatePending;
+                  return (
+                    <div key={gate.gate} className={styles.ironFunnelGroup}>
+                      <div className={`${styles.ironGate} ${statusKey}`}>
+                        <span className={styles.ironGateType}>{gate.type === 'deterministic' ? '🔒' : '🤖'}</span>
+                        <span className={styles.ironGateName}>{gate.name}</span>
+                        <span className={styles.ironGateStatus}>
+                          {gate.status === 'passed' ? `✓ ${fmtMs(gate.elapsed_ms)}` :
+                           gate.status === 'failed' ? `✗ ${gate.error_count ?? 0} err` :
+                           gate.status === 'running' ? '⏳' :
+                           gate.status === 'skipped' ? '— skip' : '…'}
+                        </span>
+                      </div>
+                      {i < ironFunnel.gates.length - 1 && (
+                        <span className={styles.ironGateArrow}>→</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           {(job.stage_history ?? []).length > 0 ? (
             <div className={styles.histList}>
               {(job.stage_history ?? []).map((h, i) => (
@@ -168,7 +247,7 @@ export function JobCard({ job }: { job: Job }) {
               ))}
             </div>
           ) : (
-            <div className={styles.noDetail}>No stage history yet</div>
+            !ironFunnel && <div className={styles.noDetail}>No stage history yet</div>
           )}
         </div>
       )}

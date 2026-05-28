@@ -1,0 +1,42 @@
+agent: research
+always:
+  - agents/templates/research.md
+  - engine/MASTER-DIRECTIVES.md
+  - exec-plan/RESEARCH-SCHEMA.md       # output contract — validator-enforced
+  - exec-plan/QUESTION-SCHEMA.md       # so research knows 1-questions.md frontmatter
+  - exec-plan/REFRAME-SCHEMA.md        # so research knows 0-reframe.md frontmatter (esp. § 4 existing-match)
+  - {{MODULE_ARCHITECTURE_DOC}}   # the 18 approved modules (Step 5 already-answered cross-ref)
+  - {{COMPLIANCE_TLDR_DOC}}             # 10 security rules — answers MUST NOT contradict (Step 5)
+  - {{DOMAIN_SPEC_DOC}}            # business model — Step 5 already-answered cross-ref
+  - {{WORKSPACE_FE}}/19-MODULE-INTEGRATION-MAP.md    # curated FE module map (Step 3 port-from-existing — prefer over raw source)
+  - 0-reframe.md                                  # § 4 existing-match seed + verdict (HALT on redirect/blocked)
+  - 1-questions.md                                # primary input — every question must be addressed
+  - .arbiter/registry.json                        # 400-item index — Step 2 scan FIRST
+  - 2-research-errors.md                          # validator errors on re-spawn (Rule E error-injection)
+on_demand:
+  - web/**                                        # bounded reads (Rule F — hard cap 25 files total)
+  - api/**                                        # bounded reads (Rule F — hard cap 25 files total)
+  - {{DOMAIN_SPEC_DIR}}/*                      # when a question is in a specific business area
+  - engine/CLI-LESSONS-LEARNED.md  # research section — known traps
+never:
+  # Research is upstream of design / integrator / plan / coders / reviewer / debugger.
+  # Reading their rule books would bias the framing toward their concerns (which don't
+  # exist yet at research time) and risk decision-sneaking (Rule C / RS12).
+  - agents/templates/design.md
+  - agents/templates/design-critic.md
+  - agents/templates/integrator.md
+  - agents/templates/plan.md
+  - agents/templates/frontend.md
+  - agents/templates/backend.md
+  - agents/templates/test-writer.md
+  - agents/templates/reviewer.md
+  - agents/templates/debugger.md
+  - agents/templates/tech-writer.md
+  # Previous-run downstream artifacts in the SAME task folder. Research must base its
+  # answers on the current codebase + registry, NOT on what a previous AI planned to do
+  # (anchoring on a stale design biases reuse-search toward the prior premise).
+  - 3-design.md
+  - integration.md
+  - 5-plan.md
+  - generated/**                                  # don't exist yet at research time
+  - tasks/**                                      # don't exist yet at research time

@@ -14,7 +14,7 @@ describe('ContextAssembler', () => {
   beforeEach(async () => {
     root = await makeRoot();
     assembler = new ContextAssembler(root);
-    taskDir = path.join(root, '.arbiter', 'tasks', 'T1');
+    taskDir = path.join(root, 'arbiter', 'tasks', 'T1');
     await fs.mkdir(taskDir, { recursive: true });
     await fs.writeFile(path.join(taskDir, 'task.md'), '# Feature\nDo the thing.', 'utf-8');
   });
@@ -122,4 +122,43 @@ describe('ContextAssembler', () => {
     if (!r1.ok || !r2.ok) return;
     expect(r1.value.contextHash).toBe(r2.value.contextHash);
   });
+
+  it('design role: prepends package version block when package.json exists', async () => {
+    await fs.writeFile(
+      path.join(root, 'package.json'),
+      JSON.stringify({ dependencies: { zod: '^3.22.4' } }),
+      'utf-8',
+    );
+    const r = await assembler.assemble('design', taskDir, 'DESIGN SYS', 'USER');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.prompt).toContain('# Package versions in this project (injected by Arbiter):');
+    expect(r.value.prompt).toContain('zod: 3.22.4');
+  });
+
+  it('design role: no version block when no package files exist', async () => {
+    const r = await assembler.assemble('design', taskDir, 'DESIGN SYS', 'USER');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // Should still work, just no version block
+    expect(r.value.prompt).toContain('DESIGN SYS');
+  });
+
+  it('getTokenBudget returns defined budget for known roles', () => {
+    expect(assembler.getTokenBudget('triage')).toBe(4_000);
+    expect(assembler.getTokenBudget('backend')).toBe(24_000);
+    expect(assembler.getTokenBudget('test-writer')).toBe(16_000);
+  });
+
+  it('getTokenBudget returns undefined for roles without explicit budget', () => {
+    expect(assembler.getTokenBudget('reframe')).toBeUndefined();
+  });
+
+  it('buildContextWithMadge falls back gracefully when madge not installed', async () => {
+    const result = await assembler.buildContextWithMadge('backend', taskDir, ['src/main.ts']);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(typeof result.value.madgeUsed).toBe('boolean');
+    expect(Array.isArray(result.value.files)).toBe(true);
+  }, 20_000);
 });

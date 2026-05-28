@@ -1,0 +1,12 @@
+agent: reviewer
+always:
+  - agents/templates/reviewer.md
+  - engine/MASTER-DIRECTIVES.md
+  - 5-plan.json
+  - integration.md
+  - agents/knowledge/quality-score.md
+  - agents/knowledge/security.md
+  - SECURITY_STANDARDS.md
+  - .arbiter/registry.json
+on_demand:
+  - {{COMPLIANCE_DOC}}

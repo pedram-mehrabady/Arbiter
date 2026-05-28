@@ -1,0 +1,18 @@
+agent: frontend
+pipeline: speed
+always:
+  - agents/templates-speed/frontend.md
+  - engine/MASTER-DIRECTIVES.md
+  - agents/knowledge/frontend-standards.md
+  - agents/knowledge/design-system.md
+  - tasks/frontend.task.md
+  - 3-design.md
+  - 5-plan.json
+  - "{{WORKSPACE_FE_CLAUDE}}"
+on_demand:
+  - agents/knowledge/security.md
+  - .arbiter/vision/<task>/*.png
+never:
+  - "{{WORKSPACE_BE}}/**"
+  - agents/templates-speed/backend.md
+  - agents/templates/

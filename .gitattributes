@@ -1,0 +1,6 @@
+# Git LFS rules for large agent output files
+# These intermediate artifacts can be 30-100k tokens per task and bloat git history.
+.arbiter/tasks/**/*-output.md filter=lfs diff=lfs merge=lfs -text
+.arbiter/tasks/**/summaries/*.md filter=lfs diff=lfs merge=lfs -text
+.arbiter/tasks/**/research-output.md filter=lfs diff=lfs merge=lfs -text
+.arbiter/tasks/**/reframe-output.md filter=lfs diff=lfs merge=lfs -text

@@ -3,7 +3,7 @@ import path from 'node:path';
 import { RateLimitInfo, UsageLedgerEntry, AgentRole, ServiceResult } from '../types/index';
 import { estimateCost } from '../providers/LLMProvider';
 
-const USAGE_FILE = path.join('.arbiter', 'usage.jsonl');
+const USAGE_FILE = path.join('arbiter', 'usage.jsonl');
 const CONTEXT_WARNING_THRESHOLD = 70_000;
 
 export interface RateLimiterConfig {

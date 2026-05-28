@@ -5,7 +5,7 @@ import { GateType, GateRegistry } from './GateRegistry';
 import { DecisionLog } from '../decisions/DecisionLog';
 import type { WebhookNotifier } from '../notifications/WebhookNotifier';
 
-const GATES_FILE = path.join('.arbiter', 'pending-gates.json');
+const GATES_FILE = path.join('arbiter', 'pending-gates.json');
 const POLL_INTERVAL_MS = 5_000;
 
 export class GatePoller {

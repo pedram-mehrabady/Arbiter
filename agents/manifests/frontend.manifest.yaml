@@ -1,0 +1,16 @@
+agent: frontend
+always:
+  - agents/templates/frontend.md
+  - engine/MASTER-DIRECTIVES.md
+  - agents/knowledge/frontend-standards.md
+  - agents/knowledge/design-system.md
+  - tasks/frontend.task.md
+  - 3-design.md
+  - {{WORKSPACE_FE_CLAUDE}}
+on_demand:
+  - agents/knowledge/security.md
+  - .arbiter/vision/<task>/*.png
+never:
+  - api/**
+  - {{WORKSPACE_BE}}/*
+  - agents/templates/backend.md

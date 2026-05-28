@@ -1,0 +1,10 @@
+agent: investigator
+pipeline: both
+always:
+  - agents/investigator/rules.md
+  - engine/MASTER-DIRECTIVES.md
+  - task.md
+never:
+  - agents/templates/
+  - contracts/
+token_budget: 12000

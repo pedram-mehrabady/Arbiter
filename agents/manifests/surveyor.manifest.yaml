@@ -1,0 +1,43 @@
+agent: surveyor
+always:
+  - agents/templates/surveyor.md
+  - engine/MASTER-DIRECTIVES.md
+  - engine/SEQUENCING-POLICY.md
+  - engine/TASK-ARCHETYPES.md        # pipeline archetype whitelist (PROP15) — archetype MUST match this enum or `plan`'s skip-profile picker crashes
+  - exec-plan/PROPOSAL-SCHEMA.md         # proposal output contract — validator-enforced
+  - exec-plan/SURVEY-REPORT-SCHEMA.md    # report output contract — validator-enforced
+  - {{COMPLIANCE_DOC}}                   # AFTA id whitelist (PROP8) + gap priority for Step 3
+  - {{WORKSPACE_FE}}/19-MODULE-INTEGRATION-MAP.md
+  - engine/COVERAGE-POLICY.md        # headroom-ratchet rule for coverage-backfill signal
+  - .arbiter/registry.json                          # 400-item component + endpoint index
+  - surveyor-errors.md                              # validator errors on re-spawn (Rule F error-injection)
+on_demand:
+  - exec-plan/00-proposed/                # carry-overs (idempotency math, Step 1)
+  - exec-plan/roadmap/                    # phase + deadline context for ranking
+  - .arbiter/FREEZE.md                  # freeze marker (HALT clause; Rule H)
+never:
+  # Reading in-flight task specs biases ranking toward the loudest current work
+  # (the human is already tracking these via Jarvis; surveyor's job is the BACKLOG, not the current build).
+  - exec-plan/01-inbox/
+  - exec-plan/02-incubating/
+  - exec-plan/03-building/
+  - exec-plan/04-human-gate/
+  - exec-plan/05-review/
+  # Downstream agent rule books — proposals would inherit their concerns and lose impartiality.
+  - agents/templates/reframe.md
+  - agents/templates/question.md
+  - agents/templates/research.md
+  - agents/templates/design.md
+  - agents/templates/design-critic.md
+  - agents/templates/integrator.md
+  - agents/templates/plan.md
+  - agents/templates/frontend.md
+  - agents/templates/backend.md
+  - agents/templates/test-writer.md
+  - agents/templates/reviewer.md
+  - agents/templates/debugger.md
+  - agents/templates/tech-writer.md
+  # Source code — research's job, not surveyor's. Registry + integration map already index what's needed.
+  - web/**
+  - api/**
+  - scripts/**

@@ -1,0 +1,25 @@
+agent: question
+always:
+  - agents/templates/question.md
+  - engine/MASTER-DIRECTIVES.md
+  - exec-plan/QUESTION-SCHEMA.md
+  - exec-plan/REFRAME-SCHEMA.md     # so question knows the structured fields in 0-reframe.md
+  - agents/knowledge/product-sense.md
+  - {{DOMAIN_SPEC_DOC}}          # Step 5 cross-reference (Rule G ban "already answered")
+  - {{MODULE_ARCHITECTURE_DOC}}  # Step 5 cross-reference (Rule G)
+  - {{COMPLIANCE_TLDR_DOC}}           # Step 5 cross-reference (Rule G) — 10 security rules already-answered
+  - spec.md                                     # raw ticket payload — Step 1 fallback when reframe feels sanitized
+  - 0-reframe.md                                # primary input — frontmatter + § 5 needs_clarification seeds
+  - 1-questions-errors.md                       # validator errors on re-spawn (Rule E error-injection)
+on_demand:
+  - {{DOMAIN_SPEC_DIR}}/                     # when ambiguity is in a specific business area
+  - engine/CLI-LESSONS-LEARNED.md  # question section — avoid known traps
+never:
+  # Question is upstream of research/design — reading their rule books would bias the framing
+  # toward their concerns (which don't exist yet).
+  - agents/templates/research.md
+  - agents/templates/design.md
+  - agents/templates/integrator.md
+  - agents/templates/plan.md
+  - generated/**                                # don't exist yet at question time
+  - .arbiter/registry.json                      # research/integrator's job; you ASK whether X exists, not verify

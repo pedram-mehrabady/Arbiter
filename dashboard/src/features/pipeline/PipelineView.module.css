@@ -69,4 +69,42 @@
   text-align: center; padding: 24px;
 }
 
+/* ── Gate timeout status banners ── */
+.gateTimeoutBanner {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 12px; border-radius: 6px; margin-bottom: 8px;
+  font-size: 11px; font-weight: 600;
+}
+.gateTimeoutWarn {
+  background: #fffbeb; border: 1px solid #fde68a; color: #d97706;
+}
+.gateTimeoutEscalated {
+  background: #fef2f2; border: 1px solid #fecaca; color: #dc2626;
+  font-weight: 800;
+}
 
+/* ── Iron funnel gate styles (pipeline-level) ── */
+.ironFunnelSection {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--bg2);
+}
+.ironFunnelHeading {
+  font-size: 9px; font-weight: 800; letter-spacing: .1em;
+  color: var(--muted); text-transform: uppercase; margin-bottom: 8px;
+}
+.gate {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--surface); min-width: 80px;
+}
+.gateDeterministic { border-color: #d1d5db; }
+.gateLlm           { border-color: #c7d2fe; }
+.gatePassed        { background: #dcfce7; border-color: #4ade80; }
+.gateFailed        { background: #fef2f2; border-color: #fca5a5; }
+.gateRunning       { background: #eef2ff; border-color: #818cf8; animation: gatePulse 2s infinite; }
+.gateSkipped       { opacity: .45; filter: grayscale(1); }
+.gatePending       { opacity: .3; filter: grayscale(1); }
+.gateArrow         { font-size: 14px; color: var(--border); }
+
+@keyframes gatePulse { 0%,100%{opacity:1} 50%{opacity:.6} }

@@ -24,9 +24,72 @@ export type AgentRole =
   | 'surveyor'
   | 'question'
   | 'prd'
-  | 'push';
+  | 'push'
+  | 'triage'
+  | 'investigator'
+  | 'orchestrator';
 
-export type PipelineName = 'standard' | 'fast';
+export type PipelineName = 'standard' | 'fast' | 'full' | 'speed';
+
+// ─── Triage ───────────────────────────────────────────────────────────────────
+
+export interface TriageResult {
+  tier: 1 | 2 | 3;
+  profile: string;
+  reason: string;
+  bypass_phase1: boolean;
+  estimated_agents: number;
+  complexity_hint: 'low' | 'medium' | 'high';
+}
+
+// ─── SQLite row types ─────────────────────────────────────────────────────────
+
+export interface TaskRow {
+  task_id: string;
+  tier: number;
+  pipeline: string;
+  profile: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SubTaskRow {
+  id?: number;
+  task_id: string;
+  agent_role: string;
+  status: string;
+  model?: string;
+  input_tokens?: number;
+  output_tokens?: number;
+  elapsed_ms?: number;
+  started_at?: string;
+  completed_at?: string;
+  output_hash?: string;
+}
+
+export interface OrchestratorStateRow {
+  task_id: string;
+  phase: string;
+  summary?: string;
+  chat_history: string;
+}
+
+// ─── Iron Funnel ──────────────────────────────────────────────────────────────
+
+export interface IronFunnelGateResult {
+  gate: 1 | 2 | 3 | 4 | 5;
+  passed: boolean;
+  elapsed_ms: number;
+  errors?: string[];
+}
+
+// ─── Worktree ─────────────────────────────────────────────────────────────────
+
+export interface WorktreeConfig {
+  enabled: boolean;
+  base_branch?: string;
+}
 
 // ─── Task + sub-task state ────────────────────────────────────────────────────
 
@@ -272,6 +335,7 @@ export interface ConductOptions {
   workspaceRoot: string;
   maxParallel: number;
   dryRun: boolean;
+  webhooks?: boolean;
   // Optional provider override — injected by integration tests via MockProvider
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   provider?: any;
