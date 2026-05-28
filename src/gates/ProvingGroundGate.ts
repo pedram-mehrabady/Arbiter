@@ -35,17 +35,54 @@ export class ProvingGroundGate {
       };
     }
 
-    const { output, exitCode } = await this.runTestSuite(worktreePath, runner);
+    const { output, exitCode } = await this.runTestSuite(worktreePath, runner, !!coverageFloors);
     const failedTests = this.parseFailedTests(output, runner);
-    const passed = exitCode === 0 && failedTests.length === 0;
+
+    // Coverage enforcement only engages when floors are configured (opt-in).
+    let coveragePct: ProvingGroundResult['coveragePct'];
+    const coverageViolations: string[] = [];
+    if (coverageFloors) {
+      coveragePct = await this.readCoverageSummary(worktreePath);
+      if (coveragePct) {
+        coverageViolations.push(...evaluateCoverage(coveragePct, coverageFloors));
+      }
+    }
+
+    const passed = exitCode === 0 && failedTests.length === 0 && coverageViolations.length === 0;
 
     return {
       passed,
       testOutput: output.slice(0, 10_000),
-      failedTests,
+      failedTests: [...failedTests, ...coverageViolations],
+      coveragePct,
       elapsed_ms: Date.now() - startMs,
       runner,
     };
+  }
+
+  private async readCoverageSummary(
+    worktreePath: string,
+  ): Promise<ProvingGroundResult['coveragePct']> {
+    const summaryPath = path.join(worktreePath, 'coverage', 'coverage-summary.json');
+    try {
+      const raw = await fs.readFile(summaryPath, 'utf-8');
+      const json = JSON.parse(raw) as {
+        total?: {
+          statements?: { pct?: number };
+          branches?: { pct?: number };
+          functions?: { pct?: number };
+        };
+      };
+      const t = json.total;
+      if (!t) return undefined;
+      return {
+        statements: t.statements?.pct ?? 0,
+        branches: t.branches?.pct ?? 0,
+        functions: t.functions?.pct ?? 0,
+      };
+    } catch {
+      return undefined;
+    }
   }
 
   private async detectRunner(dir: string): Promise<ProvingGroundResult['runner']> {
@@ -70,13 +107,21 @@ export class ProvingGroundGate {
   private async runTestSuite(
     worktreePath: string,
     runner: ProvingGroundResult['runner'],
+    withCoverage = false,
   ): Promise<{ output: string; exitCode: number }> {
-    const commands: Record<string, [string, string[]]> = {
-      vitest:     ['npx', ['vitest', 'run', '--reporter=verbose']],
-      jest:       ['npx', ['jest', '--no-coverage']],
-      pytest:     ['python', ['-m', 'pytest', '-v']],
-      playwright: ['npx', ['playwright', 'test']],
-    };
+    const commands: Record<string, [string, string[]]> = withCoverage
+      ? {
+          vitest:     ['npx', ['vitest', 'run', '--reporter=verbose', '--coverage', '--coverage.reporter=json-summary']],
+          jest:       ['npx', ['jest', '--coverage', '--coverageReporters=json-summary']],
+          pytest:     ['python', ['-m', 'pytest', '-v']],
+          playwright: ['npx', ['playwright', 'test']],
+        }
+      : {
+          vitest:     ['npx', ['vitest', 'run', '--reporter=verbose']],
+          jest:       ['npx', ['jest', '--no-coverage']],
+          pytest:     ['python', ['-m', 'pytest', '-v']],
+          playwright: ['npx', ['playwright', 'test']],
+        };
 
     const cmd = commands[runner];
     if (!cmd) return { output: '', exitCode: 0 };
@@ -116,6 +161,25 @@ export class ProvingGroundGate {
 
     return failed;
   }
+}
+
+/**
+ * Compare measured coverage percentages against the configured floors.
+ * Returns a human-readable violation string per metric that falls below its floor
+ * (empty array = all floors satisfied). Pure function — safe to unit test.
+ */
+export function evaluateCoverage(
+  pct: { statements: number; branches: number; functions: number },
+  floors: CoverageFloors,
+): string[] {
+  const violations: string[] = [];
+  const metrics: Array<keyof CoverageFloors> = ['statements', 'branches', 'functions'];
+  for (const metric of metrics) {
+    if (pct[metric] < floors[metric]) {
+      violations.push(`coverage: ${metric} ${pct[metric]}% < floor ${floors[metric]}%`);
+    }
+  }
+  return violations;
 }
 
 async function fileExists(p: string): Promise<boolean> {

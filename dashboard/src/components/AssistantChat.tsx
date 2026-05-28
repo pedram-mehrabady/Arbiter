@@ -11,9 +11,10 @@ interface Message {
 }
 
 export function AssistantChat() {
-  const { settings, setOpenModal } = useAppStore(useShallow((s) => ({
+  const { settings, setOpenModal, jobs } = useAppStore(useShallow((s) => ({
     settings:     s.settings,
     setOpenModal: s.setOpenModal,
+    jobs:         s.arbiterState.jobs,
   })));
 
   const [open, setOpen]         = useState(false);
@@ -34,6 +35,15 @@ export function AssistantChat() {
       .then(() => setOrchestratorAvailable(true))
       .catch(() => setOrchestratorAvailable(false));
   }, []);
+
+  // Bind the chat to the in-flight task so messages route through the Orchestrator.
+  // Prefer a building job, then a paused one; otherwise no active task (direct LLM).
+  useEffect(() => {
+    const active = jobs.find(j => j.status === 'building')
+      ?? jobs.find(j => j.status === 'paused')
+      ?? null;
+    setActiveTaskId(active?.id ?? null);
+  }, [jobs]);
 
   // Load history from OrchestratorHttpApi when taskId is set
   const loadHistory = useCallback(async (taskId: string) => {

@@ -188,6 +188,33 @@ export class ContextAssembler {
     return { ok: true, value: { files: [...new Set(files)], madgeUsed } };
   }
 
+  /**
+   * Run madge to produce a dependency trace for the given target paths (relative
+   * to the workspace root). Returns a compact `file → deps` adjacency list capped
+   * at `maxChars`, or '' when madge is unavailable or fails. Callers must treat an
+   * empty result as "no trace available" and degrade gracefully.
+   */
+  async dependencyTrace(targets: string[], maxChars = 8_000): Promise<string> {
+    if (targets.length === 0) return '';
+    try {
+      const { stdout } = await execFileAsync(
+        'npx',
+        ['madge', '--json', ...targets],
+        { cwd: this.workspaceRoot, timeout: 10_000 },
+      );
+      const graph = JSON.parse(stdout) as Record<string, string[]>;
+      const lines = Object.entries(graph)
+        .filter(([, deps]) => deps.length > 0)
+        .map(([file, deps]) => `${file} → ${deps.join(', ')}`);
+      const text = lines.join('\n');
+      if (!text) return '';
+      return text.length > maxChars ? `${text.slice(0, maxChars)}\n… (truncated)` : text;
+    } catch {
+      // madge not installed or failed — no trace; investigator falls back to task.md only
+      return '';
+    }
+  }
+
   private async buildSystemPrompt(
     role: AgentRole,
     passedPrompt: string,

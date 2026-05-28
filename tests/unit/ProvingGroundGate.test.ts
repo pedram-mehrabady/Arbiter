@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
-import { ProvingGroundGate } from '../../src/gates/ProvingGroundGate';
+import { ProvingGroundGate, evaluateCoverage } from '../../src/gates/ProvingGroundGate';
 
 function tempDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'proving-ground-test-'));
@@ -121,5 +121,36 @@ describe('ProvingGroundGate', () => {
     }).parseFailedTests(output, 'vitest');
 
     expect(failed).toHaveLength(0);
+  });
+
+  it('does not enforce coverage (coveragePct undefined) when no runner and no floors', async () => {
+    const result = await new ProvingGroundGate().run(dir);
+    expect(result.coveragePct).toBeUndefined();
+  });
+
+  it('passes with floors set but no runner (coverage short-circuited)', async () => {
+    const result = await new ProvingGroundGate().run(dir, { statements: 90, branches: 90, functions: 90 });
+    expect(result.passed).toBe(true);
+    expect(result.coveragePct).toBeUndefined();
+  });
+});
+
+describe('evaluateCoverage', () => {
+  const floors = { statements: 80, branches: 70, functions: 75 };
+
+  it('returns no violations when all metrics meet their floors', () => {
+    expect(evaluateCoverage({ statements: 85, branches: 72, functions: 90 }, floors)).toEqual([]);
+  });
+
+  it('returns no violations when metrics exactly equal their floors', () => {
+    expect(evaluateCoverage({ statements: 80, branches: 70, functions: 75 }, floors)).toEqual([]);
+  });
+
+  it('flags each metric that falls below its floor', () => {
+    const violations = evaluateCoverage({ statements: 79, branches: 60, functions: 75 }, floors);
+    expect(violations).toHaveLength(2);
+    expect(violations.some(v => v.includes('statements'))).toBe(true);
+    expect(violations.some(v => v.includes('branches'))).toBe(true);
+    expect(violations.some(v => v.includes('functions'))).toBe(false);
   });
 });

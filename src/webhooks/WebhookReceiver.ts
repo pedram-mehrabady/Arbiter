@@ -6,6 +6,30 @@ export const WEBHOOK_PORT = 7475;
 
 export type WebhookEventType = 'workflow_run' | 'pull_request_review_comment' | 'issue_comment' | 'unknown';
 
+export interface CiResultPayload {
+  conclusion: string;
+  prUrl: string;
+  runUrl: string;
+}
+
+export interface PrCommentPayload {
+  comment: string;
+  prNumber: number;
+  author: string;
+  isReview: boolean;
+}
+
+/**
+ * Normalized inbound webhook event, as consumed by the Conductor.
+ * GitHub-specific event types are mapped onto these two semantic kinds.
+ */
+export interface InboundWebhookEvent {
+  type: 'ci_result' | 'pr_comment';
+  task_id: string;
+  branch: string;
+  payload: CiResultPayload | PrCommentPayload;
+}
+
 export interface WebhookHandlers {
   onCiResult(taskId: string, conclusion: string, prUrl: string, runUrl: string): Promise<void>;
   onPrComment(taskId: string, comment: string, prNumber: number, author: string, isReview: boolean): Promise<void>;

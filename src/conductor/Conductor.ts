@@ -396,11 +396,18 @@ export class Conductor {
       rulesContent = await fs.readFile(rulesPath, 'utf-8');
     } catch { /* rules.md may not exist yet — safe fallback */ }
 
+    // M5.3: feed the Investigator a madge dependency trace so it can locate the
+    // root-cause files. Empty when madge isn't installed — degrade to task.md only.
+    const depTrace = await this.contextAssembler.dependencyTrace(['src']);
+
     const prompt = [
       rulesContent,
       '',
       '## Task',
       taskContent,
+      ...(depTrace
+        ? ['', '## Dependency Trace (madge)', '```', depTrace, '```']
+        : []),
     ].join('\n');
 
     const investigatorModel = this.config.roles?.['investigator']?.model ?? 'claude-sonnet-4-6';
