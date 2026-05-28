@@ -107,9 +107,11 @@ program
       try {
         await fs.access(identityPath);
       } catch {
-        // Write default identity
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const name = (await import('../bootstrap/Interview.js').then((m: any) => m.askDeveloperName?.()).catch(() => null)) ?? 'Developer';
+        // Write default identity. Never prompt in non-interactive mode (would hang CI).
+        const name = nonInteractive
+          ? 'Developer'
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          : ((await import('../bootstrap/Interview.js').then((m: any) => m.askDeveloperName?.()).catch(() => null)) ?? 'Developer');
         await fs.writeFile(identityPath, JSON.stringify({ name }, null, 2), 'utf-8');
       }
     }
