@@ -26,13 +26,13 @@ export interface AgentDocModalProps {
 
 function agentDocPath(template: 'full' | 'compact', agentKey: string, file: 'rulebook.md' | 'manifest.md') {
   const slug = template === 'compact' ? 'speed' : 'full';
-  return `.arbiter/factory/${slug}/agents/${agentKey}/${file}`;
+  return `arbiter/factory/${slug}/agents/${agentKey}/${file}`;
 }
 
 function buildTermCmd(agentModel: string, template: 'full' | 'compact', agentKey: string, os: string, repoPath?: string) {
   const slug = template === 'compact' ? 'speed' : 'full';
-  const rbPath = `.arbiter/factory/${slug}/agents/${agentKey}/rulebook.md`;
-  const mfPath = `.arbiter/factory/${slug}/agents/${agentKey}/manifest.md`;
+  const rbPath = `arbiter/factory/${slug}/agents/${agentKey}/rulebook.md`;
+  const mfPath = `arbiter/factory/${slug}/agents/${agentKey}/manifest.md`;
 
   if (os === 'win') {
     const rbWin = rbPath.replace(/\//g, '\\');
@@ -48,6 +48,15 @@ function looksLikeFileContent(text: string): boolean {
   const trimmed = text.trim();
   const lines = trimmed.split('\n');
   return lines.length > 3 && (trimmed.startsWith('#') || trimmed.startsWith('- '));
+}
+
+async function fetchDiskTemplate(pipeline: string, key: string, file: 'rulebook.md' | 'manifest.md'): Promise<string | null> {
+  try {
+    const params = new URLSearchParams({ pipeline, key, file });
+    const r = await fetch(`/api/agent-template?${params}`);
+    const data = await r.json() as { ok: boolean; content?: string };
+    return data.ok ? (data.content ?? null) : null;
+  } catch { return null; }
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -73,9 +82,18 @@ export function AgentDocModal({
   const [loading,   setLoading]         = useState(true);
   const [dirty,     setDirty]           = useState(false);
   const [saving,    setSaving]          = useState(false);
+  const [initError, setInitError]       = useState('');
   const [messages,  setMessages]        = useState<ChatMessage[]>([]);
   const [draft,     setDraft]           = useState('');
   const [busy,      setBusy]            = useState(false);
+
+  // template editing mode (Option B)
+  const [editingTemplate, setEditingTemplate] = useState(false);
+  const [tplRulebook,     setTplRulebook]     = useState('');
+  const [tplManifest,     setTplManifest]     = useState('');
+  const [tplDirty,        setTplDirty]        = useState(false);
+  const [tplSaving,       setTplSaving]       = useState(false);
+  const [tplError,        setTplError]        = useState('');
 
   const bottomRef   = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -129,26 +147,88 @@ export function AgentDocModal({
   // ── Initialize from template ──────────────────────────────────────────────
 
   const initialize = useCallback(async () => {
-    const templates = template === 'compact' ? SPEED_TEMPLATES : FULL_TEMPLATES;
-    const tpl = templates[agentKey];
-    if (!tpl) return;
+    setInitError('');
+    const pipelineSlug = template === 'compact' ? 'speed' : 'full';
 
-    const root = repoPath || undefined;
-    async function writeFile(path: string, content: string) {
-      await fetch('/api/repo-write', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path, content, ...(root ? { root } : {}) }),
-      });
+    // Option A: try disk templates first, fall back to hardcoded strings
+    const [diskRb, diskMf] = await Promise.all([
+      fetchDiskTemplate(pipelineSlug, agentKey, 'rulebook.md'),
+      fetchDiskTemplate(pipelineSlug, agentKey, 'manifest.md'),
+    ]);
+    const fallback = template === 'compact' ? SPEED_TEMPLATES : FULL_TEMPLATES;
+    const tpl = fallback[agentKey];
+    const rbContent = diskRb ?? tpl?.rulebook;
+    const mfContent = diskMf ?? tpl?.manifest;
+
+    if (!rbContent || !mfContent) {
+      setInitError(`No template found for agent "${agentKey}"`);
+      return;
     }
 
-    await Promise.all([writeFile(rbPath, tpl.rulebook), writeFile(mfPath, tpl.manifest)]);
-    setRulebook(tpl.rulebook);
-    setManifest(tpl.manifest);
-    setHasRulebook(true);
-    setHasManifest(true);
-    setDirty(false);
+    const root = repoPath || undefined;
+    async function writeFile(filePath: string, content: string) {
+      const res = await fetch('/api/repo-write', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: filePath, content, ...(root ? { root } : {}) }),
+      });
+      const data = await res.json() as { ok: boolean; error?: string };
+      if (!data.ok) throw new Error(data.error ?? `Write failed for ${filePath}`);
+    }
+
+    try {
+      await Promise.all([writeFile(rbPath, rbContent), writeFile(mfPath, mfContent)]);
+      setRulebook(rbContent);
+      setManifest(mfContent);
+      setHasRulebook(true);
+      setHasManifest(true);
+      setDirty(false);
+    } catch (e) {
+      setInitError(`Initialize failed: ${(e as Error).message}`);
+    }
   }, [template, agentKey, repoPath, rbPath, mfPath]);
+
+  // ── Load + save default templates (Option B) ──────────────────────────────
+
+  const loadTemplate = useCallback(async () => {
+    setTplError('');
+    const pipelineSlug = template === 'compact' ? 'speed' : 'full';
+    const [diskRb, diskMf] = await Promise.all([
+      fetchDiskTemplate(pipelineSlug, agentKey, 'rulebook.md'),
+      fetchDiskTemplate(pipelineSlug, agentKey, 'manifest.md'),
+    ]);
+    const fallback = template === 'compact' ? SPEED_TEMPLATES : FULL_TEMPLATES;
+    const tpl = fallback[agentKey];
+    setTplRulebook(diskRb ?? tpl?.rulebook ?? '');
+    setTplManifest(diskMf ?? tpl?.manifest ?? '');
+    setTplDirty(false);
+    setActiveTab('rulebook');
+    setEditingTemplate(true);
+  }, [template, agentKey]);
+
+  const saveTemplate = useCallback(async () => {
+    if (!tplDirty || tplSaving) return;
+    setTplSaving(true);
+    setTplError('');
+    const pipelineSlug = template === 'compact' ? 'speed' : 'full';
+    const isRulebook = activeTab === 'rulebook';
+    const file = isRulebook ? 'rulebook.md' : 'manifest.md';
+    const content = isRulebook ? tplRulebook : tplManifest;
+    try {
+      const res = await fetch('/api/save-agent-template', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pipeline: pipelineSlug, key: agentKey, file, content }),
+      });
+      const data = await res.json() as { ok: boolean; error?: string };
+      if (!data.ok) throw new Error(data.error ?? 'Save failed');
+      setTplDirty(false);
+    } catch (e) {
+      setTplError(`Save failed: ${(e as Error).message}`);
+    } finally {
+      setTplSaving(false);
+    }
+  }, [tplDirty, tplSaving, template, agentKey, activeTab, tplRulebook, tplManifest]);
 
   // ── Save current file ─────────────────────────────────────────────────────
 
@@ -198,7 +278,9 @@ export function AgentDocModal({
     const model    = settings.assistantModel || 'claude-opus-4-7';
     if (!provider) return;
 
-    const currentContent = activeTab === 'manifest' ? manifest : rulebook;
+    const currentContent = editingTemplate
+      ? (activeTab === 'manifest' ? tplManifest : tplRulebook)
+      : (activeTab === 'manifest' ? manifest : rulebook);
     const fileLabel = activeTab === 'manifest' ? 'manifest' : 'rule book';
 
     const systemMsg = [
@@ -232,9 +314,15 @@ export function AgentDocModal({
 
       if (data.ok && looksLikeFileContent(reply)) {
         if (activeTab === 'rulebook' || activeTab === 'manifest') {
-          if (activeTab === 'rulebook') setRulebook(reply.trim());
-          else setManifest(reply.trim());
-          setDirty(true);
+          if (editingTemplate) {
+            if (activeTab === 'rulebook') setTplRulebook(reply.trim());
+            else setTplManifest(reply.trim());
+            setTplDirty(true);
+          } else {
+            if (activeTab === 'rulebook') setRulebook(reply.trim());
+            else setManifest(reply.trim());
+            setDirty(true);
+          }
           setMessages((prev) => [...prev, { role: 'applied', content: '✓ Applied to editor — review and save.' }]);
         } else {
           setMessages((prev) => [...prev, { role: 'assistant', content: reply }]);
@@ -247,7 +335,7 @@ export function AgentDocModal({
     } finally {
       setBusy(false);
     }
-  }, [draft, busy, settings, activeTab, rulebook, manifest, agentLabel, messages]);
+  }, [draft, busy, settings, activeTab, rulebook, manifest, tplRulebook, tplManifest, editingTemplate, agentLabel, messages]);
 
   function onChatKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
@@ -296,7 +384,23 @@ export function AgentDocModal({
             </div>
 
             <div className={css.editorWrap}>
-              {loading ? (
+              {editingTemplate ? (
+                <>
+                  <div className={css.tplBanner}>
+                    ✏️ Editing default template — changes affect future &quot;Initialize from template&quot; runs
+                  </div>
+                  <textarea
+                    className={css.editor}
+                    value={activeTab === 'manifest' ? tplManifest : tplRulebook}
+                    onChange={(e) => {
+                      if (activeTab === 'manifest') setTplManifest(e.target.value);
+                      else setTplRulebook(e.target.value);
+                      setTplDirty(true);
+                    }}
+                    spellCheck={false}
+                  />
+                </>
+              ) : loading ? (
                 <div className={css.spinnerWrap}>
                   <div className={css.spinner} />
                   <span>Reading from repo…</span>
@@ -332,7 +436,7 @@ export function AgentDocModal({
                     <div className={css.initCtaTitle}>No docs yet</div>
                     <div className={css.initCtaDesc}>
                       Create default rule book and manifest for this agent in{' '}
-                      <code>.arbiter/factory/{templateSlug}/agents/{agentKey}/</code>
+                      <code>arbiter/factory/{templateSlug}/agents/{agentKey}/</code>
                     </div>
                     <button className={css.saveBtn} onClick={initialize}>
                       Initialize from template
@@ -429,17 +533,47 @@ export function AgentDocModal({
 
         {/* Footer */}
         <div className={css.footer}>
-          <button
-            className={css.saveBtn}
-            onClick={save}
-            disabled={!dirty || saving || activeTab === 'terminal'}
-          >
-            {saving ? 'Saving…' : '💾 Save'}
-          </button>
-          <button className={css.initBtn} onClick={initialize}>
-            Initialize from template
-          </button>
-          {dirty && <span className={css.dirtyDot}>• Unsaved changes</span>}
+          {editingTemplate ? (
+            <>
+              <button
+                className={css.saveBtn}
+                onClick={saveTemplate}
+                disabled={!tplDirty || tplSaving}
+              >
+                {tplSaving ? 'Saving…' : '💾 Save template'}
+              </button>
+              <button
+                className={css.initBtn}
+                onClick={() => { setEditingTemplate(false); setTplDirty(false); }}
+              >
+                ← Back to docs
+              </button>
+              {tplError && <span className={css.dirtyDot} style={{ color: '#ef4444' }}>{tplError}</span>}
+              {tplDirty && <span className={css.dirtyDot}>• Unsaved template changes</span>}
+            </>
+          ) : (
+            <>
+              <button
+                className={css.saveBtn}
+                onClick={save}
+                disabled={!dirty || saving || activeTab === 'terminal'}
+              >
+                {saving ? 'Saving…' : '💾 Save'}
+              </button>
+              <button className={css.initBtn} onClick={initialize}>
+                Initialize from template
+              </button>
+              <button
+                className={css.initBtn}
+                onClick={loadTemplate}
+                style={{ marginLeft: 'auto' }}
+              >
+                Edit default template
+              </button>
+              {initError && <span className={css.dirtyDot} style={{ color: '#ef4444' }}>{initError}</span>}
+              {dirty && <span className={css.dirtyDot}>• Unsaved changes</span>}
+            </>
+          )}
         </div>
       </div>
     </div>

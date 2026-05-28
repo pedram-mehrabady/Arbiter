@@ -489,3 +489,14 @@
   color: var(--accent, #6366f1);
   margin-left: 4px;
 }
+
+/* ── Template mode banner ─────────────────────────────────────────────────── */
+
+.tplBanner {
+  padding: 6px 12px;
+  background: rgba(234, 179, 8, 0.08);
+  border-bottom: 1px solid rgba(234, 179, 8, 0.18);
+  font-size: 11px;
+  color: #ca8a04;
+  flex-shrink: 0;
+}

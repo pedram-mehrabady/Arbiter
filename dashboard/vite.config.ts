@@ -122,6 +122,27 @@ export default defineConfig({
             }
           }
 
+          // ── Agent template read (Arbiter's own templates dir) ────
+          if (req.method === 'GET' && req.url?.startsWith('/api/agent-template')) {
+            const url = new URL(req.url, 'http://localhost');
+            const pipeline = url.searchParams.get('pipeline') ?? '';
+            const key      = url.searchParams.get('key')      ?? '';
+            const file     = url.searchParams.get('file')     ?? '';
+            if (!pipeline || !key || !file) {
+              return sendJson(res, 400, { ok: false, error: 'missing params' });
+            }
+            const abs = path.resolve(REPO_ROOT, 'agents', 'templates', pipeline, key, file);
+            if (!abs.startsWith(path.resolve(REPO_ROOT, 'agents', 'templates'))) {
+              return sendJson(res, 403, { ok: false, error: 'path traversal denied' });
+            }
+            try {
+              const content = fs.readFileSync(abs, 'utf-8');
+              return sendJson(res, 200, { ok: true, content });
+            } catch {
+              return sendJson(res, 404, { ok: false });
+            }
+          }
+
           if (req.method !== 'POST') return next();
 
           // ── Morning Telegram report ───────────────────────────────
@@ -235,6 +256,24 @@ export default defineConfig({
             }
 
             return sendJson(res, 400, { ok: false, error: `Unknown provider: ${provider}` });
+          }
+
+          // ── Agent template save (Arbiter's own templates dir) ────
+          if (req.url === '/api/save-agent-template') {
+            let payload: { pipeline: string; key: string; file: string; content: string };
+            try { payload = JSON.parse(await readBody(req)); }
+            catch { return sendJson(res, 400, { ok: false, error: 'bad json' }); }
+            const abs = path.resolve(REPO_ROOT, 'agents', 'templates', payload.pipeline, payload.key, payload.file);
+            if (!abs.startsWith(path.resolve(REPO_ROOT, 'agents', 'templates'))) {
+              return sendJson(res, 403, { ok: false, error: 'path traversal denied' });
+            }
+            try {
+              fs.mkdirSync(path.dirname(abs), { recursive: true });
+              fs.writeFileSync(abs, payload.content, 'utf-8');
+              return sendJson(res, 200, { ok: true });
+            } catch (e) {
+              return sendJson(res, 500, { ok: false, error: String(e) });
+            }
           }
 
           // ── File write ─────────────────────────────────────────────
