@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { shellCmd, osifyProse } from '../../lib/osCmd';
 import type { OsType } from '../../api/types';
+import { AgentDocModal } from './AgentDocModal';
 import css from './FlowView.module.css';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -770,21 +771,14 @@ function StepCard({ step, agentColor, connected, onOpenDoc, os }: {
   );
 }
 
-function AgentSection({ agent, connected, onOpenDoc, os }: {
+function AgentSection({ agent, connected, onOpenDoc, onOpenDocs, template, os }: {
   agent: Agent;
   connected: boolean;
   onOpenDoc: (path: string) => void;
+  onOpenDocs: (agent: Agent, tab: 'rulebook' | 'manifest' | 'terminal') => void;
+  template: FlowTemplate;
   os: OsType;
 }) {
-  const [termOpen, setTermOpen] = useState(false);
-  const [docsOpen, setDocsOpen] = useState(false);
-
-  async function copy(text: string) {
-    await navigator.clipboard.writeText(text).catch(() => {});
-  }
-
-  const displayCmd = shellCmd(agent.terminalCmd, os);
-
   return (
     <div className={css.agentSection}>
       <div className={css.agentLabel} style={{ background: agent.color }}>
@@ -808,54 +802,16 @@ function AgentSection({ agent, connected, onOpenDoc, os }: {
           ))}
         </div>
 
-        {/* Docs + Terminal */}
+        {/* Docs + Terminal — open the AgentDocModal on the relevant tab */}
         <div className={css.agentFooter}>
-          {/* Docs toggle */}
-          <button className={css.footerToggle} onClick={() => setDocsOpen((v) => !v)}>
+          <button className={css.footerToggle} onClick={() => onOpenDocs(agent, 'rulebook')}>
             <span>📄 Rule book &amp; manifest</span>
-            <span className={css.toggleCaret}>{docsOpen ? '▲' : '▼'}</span>
+            <span className={css.toggleCaret}>↗</span>
           </button>
-          {docsOpen && (
-            <div className={css.docsExpanded}>
-              <div className={css.docRow}>
-                <span className={css.docType}>Rule book</span>
-                {connected ? (
-                  <button className={css.docPathBtn} onClick={() => onOpenDoc(agent.ruleBook)}>
-                    {agent.ruleBook} <span className={css.filePathArrow}>↗</span>
-                  </button>
-                ) : (
-                  <code className={css.docPath}>{agent.ruleBook}</code>
-                )}
-                <button className={css.docCopy} onClick={() => copy(agent.ruleBook)}>Copy</button>
-              </div>
-              <div className={css.docRow}>
-                <span className={css.docType}>Manifest</span>
-                {connected ? (
-                  <button className={css.docPathBtn} onClick={() => onOpenDoc(agent.manifest)}>
-                    {agent.manifest} <span className={css.filePathArrow}>↗</span>
-                  </button>
-                ) : (
-                  <code className={css.docPath}>{agent.manifest}</code>
-                )}
-                <button className={css.docCopy} onClick={() => copy(agent.manifest)}>Copy</button>
-              </div>
-            </div>
-          )}
-
-          {/* Terminal toggle */}
-          <button className={css.footerToggle} onClick={() => setTermOpen((v) => !v)}>
+          <button className={css.footerToggle} onClick={() => onOpenDocs(agent, 'terminal')}>
             <span>⌨ Terminal command</span>
-            <span className={css.toggleCaret}>{termOpen ? '▲' : '▼'}</span>
+            <span className={css.toggleCaret}>↗</span>
           </button>
-          {termOpen && (
-            <div className={css.terminalExpanded}>
-              <div className={css.terminalNote}>{osifyProse(agent.terminalNote, os)}</div>
-              <div className={css.terminalCmdRow}>
-                <pre className={css.terminalPre}><code>{displayCmd}</code></pre>
-                <button className={css.terminalCopy} onClick={() => copy(displayCmd)}>Copy</button>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>
@@ -893,6 +849,19 @@ export function FlowView() {
 
   const activeGroups = template === 'compact' ? COMPACT_PHASE_GROUPS : PHASE_GROUPS;
 
+  const [docModal, setDocModal] = useState<{
+    agentKey:   string;
+    agentLabel: string;
+    agentEmoji: string;
+    agentModel: string;
+    template:   FlowTemplate;
+    initialTab: 'rulebook' | 'manifest' | 'terminal';
+  } | null>(null);
+
+  const openAgentDocs = useCallback((agent: Agent, tab: 'rulebook' | 'manifest' | 'terminal', tpl: FlowTemplate) => {
+    setDocModal({ agentKey: agent.key, agentLabel: agent.label, agentEmoji: agent.emoji, agentModel: agent.model, template: tpl, initialTab: tab });
+  }, []);
+
   const [docPath,    setDocPath]    = useState<string | null>(null);
   const [docContent, setDocContent] = useState<string | null>(null);
   const [docLoading, setDocLoading] = useState(false);
@@ -913,6 +882,18 @@ export function FlowView() {
 
   return (
     <div className={css.shell}>
+      {docModal && (
+        <AgentDocModal
+          agentKey={docModal.agentKey}
+          agentLabel={docModal.agentLabel}
+          agentEmoji={docModal.agentEmoji}
+          agentModel={docModal.agentModel}
+          template={docModal.template}
+          initialTab={docModal.initialTab}
+          onClose={() => setDocModal(null)}
+        />
+      )}
+
       {docPath && (
         <DocPopup
           path={docPath}
@@ -1021,7 +1002,7 @@ export function FlowView() {
             <div className={css.phaseAgents}>
               {group.agents.map((agent, ai) => (
                 <div key={agent.key} className={css.agentWithArrow}>
-                  <AgentSection agent={agent} connected={isConnected} onOpenDoc={openDoc} os={os} />
+                  <AgentSection agent={agent} connected={isConnected} onOpenDoc={openDoc} onOpenDocs={(a, tab) => openAgentDocs(a, tab, template)} template={template} os={os} />
                   {ai < group.agents.length - 1 && <div className={css.rightArrow}>→</div>}
                 </div>
               ))}
@@ -1043,7 +1024,7 @@ export function FlowView() {
             <div className={css.downArrow} style={{ opacity: 0.4 }}>↓ nightly</div>
             <div className={css.surveyorWrap}>
               <div className={css.surveyorBadge}>SCHEDULED</div>
-              <AgentSection agent={SURVEYOR} connected={isConnected} onOpenDoc={openDoc} os={os} />
+              <AgentSection agent={SURVEYOR} connected={isConnected} onOpenDoc={openDoc} onOpenDocs={(a, tab) => openAgentDocs(a, tab, 'full')} template="full" os={os} />
             </div>
           </>
         )}
