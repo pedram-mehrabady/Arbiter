@@ -37,9 +37,9 @@ function buildTermCmd(agentModel: string, template: 'full' | 'compact', agentKey
   if (os === 'win') {
     const rbWin = rbPath.replace(/\//g, '\\');
     const mfWin = mfPath.replace(/\//g, '\\');
-    return `claude --model ${agentModel} \`\n  --system-prompt (Get-Content "${rbWin}") \`\n  -p (Get-Content "${mfWin}")`;
+    return `claude --model ${agentModel} \`\n  --dangerously-skip-permissions \`\n  --system-prompt (Get-Content "${rbWin}") \`\n  -p (Get-Content "${mfWin}")`;
   }
-  return `claude --model ${agentModel} \\\n  --system-prompt "$(cat ${rbPath})" \\\n  -p "$(cat ${mfPath})"`;
+  return `claude --model ${agentModel} \\\n  --dangerously-skip-permissions \\\n  --system-prompt "$(cat ${rbPath})" \\\n  -p "$(cat ${mfPath})"`;
 }
 
 function looksLikeFileContent(text: string): boolean {
