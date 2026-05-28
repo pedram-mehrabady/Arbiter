@@ -773,6 +773,7 @@ syncCmd
       'agents/manifests', 'agents/manifests-speed',
       'agents/orchestrator', 'agents/triage',
       'agents/investigator', 'agents/knowledge',
+      'engine',
     ];
 
     // Load template_vars from arbiter.config.json if present

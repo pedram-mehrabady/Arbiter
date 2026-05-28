@@ -104,6 +104,41 @@ describe('CompilerAirlockGate', () => {
     expect(result.errors.some(e => e.tool === 'tsc')).toBe(false);
   });
 
+  it('catches a direct prisma client import in a frontend .tsx file', async () => {
+    const dir = tempDir();
+    fs.writeFileSync(path.join(dir, 'Widget.tsx'), "import { PrismaClient } from '@prisma/client';\nexport const x = 1;");
+    const gate = new CompilerAirlockGate();
+
+    const result = await gate.run(dir);
+
+    expect(result.passed).toBe(false);
+    expect(result.errors.some(e => e.message.includes('direct_db_in_frontend'))).toBe(true);
+  });
+
+  it('allows a prisma client import inside an api/ path (excluded)', async () => {
+    const dir = tempDir();
+    fs.mkdirSync(path.join(dir, 'api'));
+    fs.writeFileSync(path.join(dir, 'api', 'handler.ts'), "import { PrismaClient } from '@prisma/client';\nexport const x = 1;");
+    const gate = new CompilerAirlockGate();
+
+    const result = await gate.run(dir);
+
+    expect(result.errors.some(e => e.message.includes('direct_db_in_frontend'))).toBe(false);
+  });
+
+  it('reports : any as a warning but does NOT fail the gate', async () => {
+    const dir = tempDir();
+    fs.writeFileSync(path.join(dir, 'loose.ts'), 'export function f(x: any) { return x; }');
+    const gate = new CompilerAirlockGate();
+
+    const result = await gate.run(dir);
+
+    expect(result.passed).toBe(true);
+    const warn = result.errors.find(e => e.message.includes('any_type_explicit'));
+    expect(warn).toBeDefined();
+    expect(warn?.severity).toBe('warn');
+  });
+
   it('detects contract mutation on Tier 2 tasks (git mock scenario)', async () => {
     const dir = tempDir();
     const gate = new CompilerAirlockGate();

@@ -28,6 +28,7 @@
   "files": [
     "dist/",
     "agents/",
+    "engine/",
     "project-templates/",
     "README.md",
     "LICENSE"

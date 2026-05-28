@@ -10,6 +10,8 @@ export interface CompilerError {
   message: string;
   file?: string;
   line?: number;
+  /** 'error' fails the gate; 'warn' is reported but does not fail. Defaults to 'error'. */
+  severity?: 'error' | 'warn';
 }
 
 export interface CompilerAirlockResult {
@@ -18,10 +20,30 @@ export interface CompilerAirlockResult {
   elapsed_ms: number;
 }
 
-const FORBIDDEN_PATTERNS: Array<{ name: string; pattern: RegExp; tool: 'forbidden_pattern' }> = [
-  { name: 'dangerouslySetInnerHTML', pattern: /dangerouslySetInnerHTML/g, tool: 'forbidden_pattern' },
-  { name: 'eval_usage', pattern: /\beval\s*\(/g, tool: 'forbidden_pattern' },
-  { name: 'document_write', pattern: /document\.write\s*\(/g, tool: 'forbidden_pattern' },
+interface ForbiddenPattern {
+  name: string;
+  pattern: RegExp;
+  tool: 'forbidden_pattern';
+  severity: 'error' | 'warn';
+  /** Only scan files whose relative path ends with one of these extensions. Empty = all source files. */
+  includeExtensions?: string[];
+  /** Skip files whose relative path contains any of these path fragments. */
+  excludePathFragments?: string[];
+}
+
+const FORBIDDEN_PATTERNS: ForbiddenPattern[] = [
+  { name: 'dangerouslySetInnerHTML', pattern: /dangerouslySetInnerHTML/g, tool: 'forbidden_pattern', severity: 'error' },
+  { name: 'eval_usage', pattern: /\beval\s*\(/g, tool: 'forbidden_pattern', severity: 'error' },
+  { name: 'document_write', pattern: /document\.write\s*\(/g, tool: 'forbidden_pattern', severity: 'error' },
+  {
+    name: 'direct_db_in_frontend',
+    pattern: /import\s+.*from\s+['"].*prisma.*client['"]/g,
+    tool: 'forbidden_pattern',
+    severity: 'error',
+    includeExtensions: ['.ts', '.tsx'],
+    excludePathFragments: ['/api/', '/server/'],
+  },
+  { name: 'any_type_explicit', pattern: /:\s*any\b/g, tool: 'forbidden_pattern', severity: 'warn' },
 ];
 
 export class CompilerAirlockGate {
@@ -36,25 +58,74 @@ export class CompilerAirlockGate {
     const tscErrors = await this.runTsc(worktreePath);
     errors.push(...tscErrors);
 
-    // Step 2: Forbidden pattern scan
+    // Step 2: ESLint (if the project has an eslint config)
+    const eslintErrors = await this.runEslint(worktreePath);
+    errors.push(...eslintErrors);
+
+    // Step 3: Forbidden pattern scan
     const patternErrors = await this.scanForbiddenPatterns(worktreePath);
     errors.push(...patternErrors);
 
-    // Step 3: Prisma validate (if schema exists)
+    // Step 4: Prisma validate (if schema exists)
     const prismaErrors = await this.runPrismaValidate(worktreePath);
     errors.push(...prismaErrors);
 
-    // Step 4: Contract mutation check (Tier 2 only)
+    // Step 5: Contract mutation check (Tier 2 only)
     if (options.tier === 2 && options.lockedContractPaths?.length) {
       const mutationErrors = await this.checkContractMutations(worktreePath, options.lockedContractPaths);
       errors.push(...mutationErrors);
     }
 
+    // Only error-severity findings fail the gate; warnings are reported but pass.
+    const blocking = errors.filter(e => (e.severity ?? 'error') === 'error');
+
     return {
-      passed: errors.length === 0,
+      passed: blocking.length === 0,
       errors,
       elapsed_ms: Date.now() - startMs,
     };
+  }
+
+  private async runEslint(worktreePath: string): Promise<CompilerError[]> {
+    const hasConfig = await firstExisting(worktreePath, [
+      'eslint.config.js', 'eslint.config.mjs', 'eslint.config.cjs', 'eslint.config.ts',
+      '.eslintrc', '.eslintrc.js', '.eslintrc.cjs', '.eslintrc.json', '.eslintrc.yml', '.eslintrc.yaml',
+    ]);
+    if (!hasConfig) return [];
+
+    try {
+      await execFileAsync('npx', ['eslint', '.', '--format', 'json', '--no-error-on-unmatched-pattern'], {
+        timeout: 60_000,
+        cwd: worktreePath,
+      });
+      return [];
+    } catch (err) {
+      const output = String((err as NodeJS.ErrnoException & { stdout?: string }).stdout ?? '');
+      return this.parseEslintOutput(output, worktreePath);
+    }
+  }
+
+  private parseEslintOutput(output: string, worktreePath: string): CompilerError[] {
+    const errors: CompilerError[] = [];
+    let report: Array<{ filePath: string; messages: Array<{ ruleId?: string; message: string; line?: number; severity: number }> }>;
+    try {
+      report = JSON.parse(output);
+    } catch {
+      // eslint produced non-JSON (e.g. crashed) — surface a single generic error
+      return output.trim() ? [{ tool: 'eslint', message: output.trim().slice(0, 300), severity: 'error' }] : [];
+    }
+    for (const fileReport of report) {
+      for (const m of fileReport.messages) {
+        errors.push({
+          tool: 'eslint',
+          file: path.relative(worktreePath, fileReport.filePath),
+          line: m.line,
+          message: `${m.ruleId ? `${m.ruleId}: ` : ''}${m.message}`,
+          severity: m.severity === 2 ? 'error' : 'warn',
+        });
+      }
+    }
+    return errors;
   }
 
   private async runTsc(worktreePath: string): Promise<CompilerError[]> {
@@ -99,15 +170,20 @@ export class CompilerAirlockGate {
     const files = await findSourceFiles(worktreePath);
 
     for (const filePath of files) {
+      const rel = path.relative(worktreePath, filePath);
+      const relPosix = rel.split(path.sep).join('/');
       try {
         const content = await fs.readFile(filePath, 'utf-8');
-        for (const { name, pattern } of FORBIDDEN_PATTERNS) {
-          pattern.lastIndex = 0;
-          if (pattern.test(content)) {
+        for (const fp of FORBIDDEN_PATTERNS) {
+          if (fp.includeExtensions && !fp.includeExtensions.some(ext => relPosix.endsWith(ext))) continue;
+          if (fp.excludePathFragments?.some(frag => `/${relPosix}`.includes(frag))) continue;
+          fp.pattern.lastIndex = 0;
+          if (fp.pattern.test(content)) {
             errors.push({
               tool: 'forbidden_pattern',
-              file: path.relative(worktreePath, filePath),
-              message: `Forbidden pattern "${name}" detected`,
+              file: rel,
+              message: `Forbidden pattern "${fp.name}" detected`,
+              severity: fp.severity,
             });
           }
         }
@@ -171,6 +247,13 @@ export class CompilerAirlockGate {
 
 async function fileExists(p: string): Promise<boolean> {
   return fs.access(p).then(() => true).catch(() => false);
+}
+
+async function firstExisting(dir: string, candidates: string[]): Promise<boolean> {
+  for (const name of candidates) {
+    if (await fileExists(path.join(dir, name))) return true;
+  }
+  return false;
 }
 
 async function findSourceFiles(dir: string, extensions = ['.ts', '.tsx', '.js', '.jsx']): Promise<string[]> {
