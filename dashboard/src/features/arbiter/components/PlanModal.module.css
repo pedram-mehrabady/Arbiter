@@ -1,0 +1,122 @@
+.typeRow {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.typeBtn {
+  flex: 1;
+  padding: 7px 0;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg2);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all .12s;
+}
+.typeBtnActive {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.analyzingWrap {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 32px 0;
+}
+
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.analyzingTitle {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.analyzingSub {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.resultCard {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.resultRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.resultLabel {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  min-width: 72px;
+  padding-top: 2px;
+}
+
+.resultValue {
+  font-size: 13px;
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.complexitySimple  { color: #68d391; }
+.complexityMedium  { color: #f6ad55; }
+.complexityComplex { color: #fc8181; }
+.complexityEpic    { color: #b794f4; }
+
+.estChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.estChip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 2px 10px 2px 8px;
+  font-size: 12px;
+  color: var(--fg);
+}
+
+.estKey {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.error {
+  color: #fc8181;
+  font-size: 12px;
+  margin-top: 8px;
+}

@@ -1,0 +1,65 @@
+.section { margin-bottom: 18px; }
+.section:last-child { margin-bottom: 0; }
+
+.sectionTitle {
+  font-size: 9px; font-weight: 700; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.prose {
+  font-size: 13px; color: var(--text); line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 10px; border-radius: 6px;
+  background: var(--bg2); font-size: 12px; margin-bottom: 4px;
+}
+.rowLabel { color: var(--muted); min-width: 80px; flex-shrink: 0; }
+.rowValue { color: var(--text); font-weight: 600; }
+
+.chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px; border-radius: 5px; font-size: 11px; font-weight: 600;
+  background: var(--bg2); border: 1px solid var(--border); color: var(--muted);
+  margin: 2px;
+}
+
+.histItem {
+  display: flex; align-items: center; gap: 10px;
+  padding: 5px 10px; border-radius: 6px;
+  background: var(--bg2); font-size: 12px; margin-bottom: 3px;
+}
+.histStage   { flex: 1; font-family: monospace; font-size: 11px; color: var(--text); }
+.histDur     { color: var(--muted); font-size: 11px; min-width: 32px; text-align: right; }
+.histOutcome { font-size: 10px; font-weight: 700; min-width: 52px; text-align: right; }
+.pass   { color: #16a34a; }
+.rework { color: #d97706; }
+.fail   { color: #dc2626; }
+
+.liveNote {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px; border-radius: 8px;
+  background: var(--auto-dim); border: 1px solid var(--auto-border);
+  font-size: 12px; color: var(--accent); line-height: 1.4;
+}
+
+.checkItem {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 7px 10px; border-radius: 7px;
+  border: 1px solid transparent; margin-bottom: 4px; font-size: 12px;
+}
+.pass_bg  { background: #f0fdf4; border-color: #bbf7d0; }
+.warn_bg  { background: #fffbeb; border-color: #fde68a; }
+.fail_bg  { background: #fef2f2; border-color: #fecaca; }
+.checkLabel  { font-weight: 600; color: var(--text); }
+.checkDetail { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+.empty { font-size: 12px; color: var(--muted); font-style: italic; }
+
+.kpiRow { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 14px; }
+.kpi    { display: flex; flex-direction: column; }
+.kpiNum { font-size: 28px; font-weight: 900; color: var(--text); line-height: 1; letter-spacing: -.02em; }
+.kpiLbl { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin-top: 2px; }

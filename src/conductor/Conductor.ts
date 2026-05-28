@@ -32,6 +32,10 @@ import { PlanValidator } from '../plan/PlanValidator';
 import { FIXED_PIPELINE_IDS } from '../plan/PlanOutput';
 import { DebuggerGuard } from './DebuggerGuard';
 import { EvidenceCache, parseBlastRadius } from '../evidence/EvidenceCache';
+import { OpenAIProvider } from '../providers/OpenAIProvider';
+import { GeminiProvider } from '../providers/GeminiProvider';
+import { WebhookNotifier } from '../notifications/WebhookNotifier';
+import { GitAutoCommit } from '../git/GitAutoCommit';
 
 const CONFIG_FILE = 'arbiter.config.json';
 const FALLBACK_CONFIG_FILE = 'factory-config.json';
@@ -44,7 +48,7 @@ interface SubTaskRunResult {
 }
 
 export class Conductor {
-  private readonly stateStore: StateStore;
+  private stateStore: StateStore;
   private readonly decisionLog: DecisionLog;
   private readonly failureClassifier = new FailureClassifier();
   private readonly preflight: PreflightCheck;
@@ -61,6 +65,8 @@ export class Conductor {
   private provider: LLMProvider;
   private config: FactoryConfig | null = null;
   private readonly options: ConductOptions;
+  private notifier: WebhookNotifier | undefined;
+  private gitAutoCommit: GitAutoCommit | undefined;
 
   constructor(options: ConductOptions) {
     this.options = options;
@@ -78,6 +84,8 @@ export class Conductor {
   }
 
   async conduct(taskId: string): Promise<ServiceResult<ConductSummary>> {
+    // Reinitialise with per-task state path so concurrent conductors don't share state.
+    this.stateStore = new StateStore(this.options.workspaceRoot, taskId);
     const startMs = Date.now();
     const configResult = await this.loadConfig();
     if (!configResult.ok) return configResult;
@@ -93,13 +101,6 @@ export class Conductor {
     }
 
     let state = stateResult.value;
-    if (state.task_id !== taskId) {
-      return {
-        ok: false,
-        error: `State file contains task ${state.task_id}, expected ${taskId}`,
-        code: 'TASK_MISMATCH',
-      };
-    }
 
     if (this.options.resume) {
       const recoveryResult = await this.recoverState(taskId, state);
@@ -261,12 +262,18 @@ export class Conductor {
           }
         }
 
+        if (this.notifier) {
+          void this.notifier.notify('task_complete', { task_id: taskId });
+        }
         return { ok: true, value: { bundlePath } };
       }
 
       if (TaskQueue.hasFailed(state)) {
         await this.decisionLog.append({ task_id: taskId, event: 'pipeline_halted', detail: 'Sub-task in failed state' });
         console.error(`\n✗ Task ${taskId} halted — a sub-task failed. Review decision log.`);
+        if (this.notifier) {
+          void this.notifier.notify('task_failed', { task_id: taskId });
+        }
         return { ok: false, error: 'Pipeline halted due to sub-task failure', code: 'SUBTASK_FAILED' };
       }
 
@@ -477,6 +484,13 @@ export class Conductor {
     });
 
     await this.decisionLog.logAgentComplete(taskId, subTaskId, agentRole, receiptId ?? 'none');
+
+    if (this.gitAutoCommit) {
+      const commitResult = await this.gitAutoCommit.commit(taskId, subTaskId, agentRole);
+      if (!commitResult.ok) {
+        console.warn(`  ⚠ Git auto-commit failed for ${subTaskId}: ${commitResult.error}`);
+      }
+    }
 
     // P1-7: After design-critic completes, write this run's design to the evidence cache.
     if (agentRole === 'design-critic' && receiptId) {
@@ -984,6 +998,16 @@ export class Conductor {
               ?? (providerConfig?.api_key_env ? process.env[providerConfig.api_key_env as string] : undefined)
               ?? process.env.ANTHROPIC_API_KEY;
             this.provider = new AnthropicSdkProvider({ apiKey });
+          } else if (providerName === 'openai') {
+            const apiKey = providerConfig?.api_key
+              ?? (providerConfig?.api_key_env ? process.env[providerConfig.api_key_env as string] : undefined)
+              ?? process.env.OPENAI_API_KEY;
+            this.provider = new OpenAIProvider({ apiKey, baseUrl: providerConfig?.base_url });
+          } else if (providerName === 'gemini') {
+            const apiKey = providerConfig?.api_key
+              ?? (providerConfig?.api_key_env ? process.env[providerConfig.api_key_env as string] : undefined)
+              ?? process.env.GEMINI_API_KEY;
+            this.provider = new GeminiProvider({ apiKey, baseUrl: providerConfig?.base_url });
           } else if (providerName === 'ollama') {
             this.provider = new OllamaProvider({ baseUrl: providerConfig?.base_url });
           } else if (providerConfig?.cmd) {
@@ -992,6 +1016,17 @@ export class Conductor {
               headlessFlag: providerConfig.headless_flag ?? '-p',
             });
           }
+        }
+
+        // Wire webhook notifier
+        if (this.config.notifications?.webhook_url) {
+          this.notifier = new WebhookNotifier(this.config.notifications);
+          this.gatePoller.setNotifier(this.notifier);
+        }
+
+        // Wire git auto-commit
+        if (this.config.git_auto_commit?.enabled) {
+          this.gitAutoCommit = new GitAutoCommit(this.options.workspaceRoot, this.config.git_auto_commit);
         }
 
         return { ok: true, value: undefined };

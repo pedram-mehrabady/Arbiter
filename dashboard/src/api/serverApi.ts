@@ -1,0 +1,228 @@
+/**
+ * ServerApi — mirrors LiveApi but talks to the Vite dev-server file endpoints
+ * instead of the browser File System Access API. Used when connecting by path
+ * (e.g. from Playwright or CI) rather than via the folder picker.
+ */
+import type {
+  ArbiterState, CliStats, AgentData, ImprovementItem,
+  PlanOrderRequest, PlanOrderResult, CliMessage, BoardData,
+  ConductorSession, GateName, ArbiterConfig, AgentsConfig,
+} from './types';
+
+async function serverRead(relPath: string, root: string): Promise<string | null> {
+  try {
+    const r = await fetch(
+      `/api/repo-read?path=${encodeURIComponent(relPath)}&root=${encodeURIComponent(root)}`
+    );
+    if (!r.ok) return null;
+    const j = await r.json() as { ok: boolean; content?: string };
+    return j.ok ? (j.content ?? null) : null;
+  } catch { return null; }
+}
+
+async function serverWrite(relPath: string, content: string, root: string): Promise<void> {
+  await fetch('/api/repo-write', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: relPath, content, root }),
+  });
+}
+
+async function serverLs(relPath: string, root: string): Promise<Array<{ name: string; kind: string; mtime_ms?: number }>> {
+  try {
+    const r = await fetch(
+      `/api/repo-ls?path=${encodeURIComponent(relPath)}&root=${encodeURIComponent(root)}`
+    );
+    if (!r.ok) return [];
+    const j = await r.json() as { ok: boolean; entries?: Array<{ name: string; kind: string; mtime_ms?: number }> };
+    return j.ok ? (j.entries ?? []) : [];
+  } catch { return []; }
+}
+
+export class ServerApi {
+  constructor(
+    private arbiterPath: string,  // absolute path to .arbiter/
+    private rootPath: string,    // absolute path to repo root
+  ) {}
+
+  async writeDeveloperIdentity(name: string): Promise<void> {
+    await serverWrite('.arbiter/developer-identity.json', JSON.stringify({ name: name.trim() }, null, 2), this.rootPath);
+  }
+
+  async readState(): Promise<ArbiterState | null> {
+    const raw = await serverRead('.arbiter/mcp-state.json', this.rootPath);
+    try { return raw ? JSON.parse(raw) : null; } catch { return null; }
+  }
+
+  async readBoard(): Promise<BoardData | null> {
+    const raw = await serverRead('.arbiter/board.json', this.rootPath);
+    try { return raw ? JSON.parse(raw) : null; } catch { return null; }
+  }
+
+  async readCliStats(): Promise<CliStats | null> {
+    const raw = await serverRead('.arbiter/cli-stats.json', this.rootPath);
+    try { return raw ? JSON.parse(raw) : null; } catch { return null; }
+  }
+
+  async readMessages(): Promise<CliMessage[]> {
+    const raw = await serverRead('.arbiter/messages.json', this.rootPath);
+    try {
+      const data = raw ? JSON.parse(raw) : null;
+      if (Array.isArray(data)) return data;
+      if (Array.isArray(data?.messages)) return data.messages;
+      return [];
+    } catch { return []; }
+  }
+
+  async appendMessage(msg: CliMessage): Promise<void> {
+    const existing = await this.readMessages();
+    existing.push(msg);
+    await serverWrite('.arbiter/messages.json', JSON.stringify(existing, null, 2), this.rootPath);
+  }
+
+  async readAgents(): Promise<Record<string, AgentData>> {
+    const entries = await serverLs('.arbiter/agents', this.rootPath);
+    const result: Record<string, AgentData> = {};
+    await Promise.all(
+      entries
+        .filter((e) => e.kind === 'file' && e.name.endsWith('.json'))
+        .map(async (e) => {
+          const raw = await serverRead(`.arbiter/agents/${e.name}`, this.rootPath);
+          try { if (raw) result[e.name.replace('.json', '')] = JSON.parse(raw); } catch { /* skip */ }
+        })
+    );
+    return result;
+  }
+
+  async readPlanFile(ticket: string): Promise<string | null> {
+    const filename = `${ticket.replace(/[^a-zA-Z0-9-_]/g, '')}.md`;
+    return serverRead(`.arbiter/plans/${filename}`, this.rootPath);
+  }
+
+  async writePlanFile(ticket: string, content: string): Promise<string> {
+    const filename = `${ticket.replace(/[^a-zA-Z0-9-_]/g, '')}.md`;
+    await serverWrite(`.arbiter/plans/${filename}`, content, this.rootPath);
+    return filename;
+  }
+
+  async writeExtraDocs(ticket: string, content: string): Promise<void> {
+    const filename = `${ticket.replace(/[^a-zA-Z0-9-_]/g, '')}-docs.md`;
+    await serverWrite(`.arbiter/plans/${filename}`, content, this.rootPath);
+  }
+
+  async readArbiterConfig(): Promise<ArbiterConfig | null> {
+    const raw = await serverRead('arbiter.config.json', this.rootPath);
+    try { return raw ? JSON.parse(raw) : null; } catch { return null; }
+  }
+
+  async readAgentsConfig(agentsConfigPath = 'compliance/automation/agents.config.json'): Promise<AgentsConfig | null> {
+    const raw = await serverRead(agentsConfigPath, this.rootPath);
+    try { return raw ? JSON.parse(raw) : null; } catch { return null; }
+  }
+
+  async writeInboxTask(taskId: string, brief: string, execPlanDir = 'compliance/exec-plan'): Promise<void> {
+    await serverWrite(`${execPlanDir}/01-inbox/${taskId}.md`, brief, this.rootPath);
+  }
+
+  async enqueueTask(taskId: string): Promise<void> {
+    const raw = await serverRead('.arbiter/queue-order.json', this.rootPath);
+    let order: string[] = [];
+    try {
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (Array.isArray(parsed)) order = parsed;
+      else if (parsed?.order && Array.isArray(parsed.order)) order = parsed.order;
+    } catch { /* first */ }
+    if (!order.includes(taskId)) order.push(taskId);
+    await serverWrite('.arbiter/queue-order.json', JSON.stringify({ order }, null, 2), this.rootPath);
+  }
+
+  async readArbiterConfigRaw(): Promise<object | null> {
+    const raw = await serverRead('arbiter.config.json', this.rootPath);
+    try { return raw ? JSON.parse(raw) : null; } catch { return null; }
+  }
+
+  async writeArbiterConfigRaw(config: object): Promise<void> {
+    await serverWrite('arbiter.config.json', JSON.stringify(config, null, 2) + '\n', this.rootPath);
+  }
+
+  async readFactoryConfig(): Promise<object | null> {
+    const raw = await serverRead('compliance/automation/factory-config.json', this.rootPath);
+    try { return raw ? JSON.parse(raw) : null; } catch { return null; }
+  }
+
+  async writeFactoryConfig(config: object): Promise<void> {
+    await serverWrite('compliance/automation/factory-config.json', JSON.stringify(config, null, 2), this.rootPath);
+  }
+
+  async readRepoFile(relativePath: string): Promise<string | null> {
+    return serverRead(relativePath, this.rootPath);
+  }
+
+  async listExecPlanFolder(stageDir: string, taskId: string, execPlanDir = 'compliance/exec-plan'): Promise<Array<{ name: string; mtime_ms: number }>> {
+    const entries = await serverLs(`${execPlanDir}/${stageDir}/${taskId}`, this.rootPath);
+    return entries
+      .filter((e) => e.kind === 'file')
+      .map((e) => ({ name: e.name, mtime_ms: e.mtime_ms ?? 0 }));
+  }
+
+  async writeImprovementItem(item: ImprovementItem): Promise<void> {
+    const raw = await serverRead('.arbiter/improvements.json', this.rootPath);
+    let items: ImprovementItem[] = [];
+    try { const parsed = raw ? JSON.parse(raw) : []; if (Array.isArray(parsed)) items = parsed; } catch { /* first */ }
+    items.unshift(item);
+    await serverWrite('.arbiter/improvements.json', JSON.stringify(items, null, 2), this.rootPath);
+  }
+
+  async writeResponse(id: string, value: string): Promise<void> {
+    const raw = await serverRead('.arbiter/arbiter-responses.json', this.rootPath);
+    let data: { responses: object[] } = { responses: [] };
+    try { const parsed = raw ? JSON.parse(raw) : null; if (parsed) data = parsed; } catch { /* first */ }
+    if (!Array.isArray(data.responses)) data.responses = [];
+    data.responses.push({ id, value, responded_at: new Date().toISOString() });
+    await serverWrite('.arbiter/arbiter-responses.json', JSON.stringify(data, null, 2), this.rootPath);
+  }
+
+  async clearPendingApproval(): Promise<void> {
+    const raw = await serverRead('.arbiter/mcp-state.json', this.rootPath);
+    try {
+      const state = raw ? JSON.parse(raw) : null;
+      if (!state) return;
+      state.pending_approval = null;
+      await serverWrite('.arbiter/mcp-state.json', JSON.stringify(state, null, 2), this.rootPath);
+    } catch { /* malformed — skip */ }
+  }
+
+  async writeOrderRequest(payload: PlanOrderRequest): Promise<void> {
+    await serverWrite('.arbiter/order-request.json', JSON.stringify(payload, null, 2), this.rootPath);
+  }
+
+  async readOrderResult(): Promise<PlanOrderResult | null> {
+    const raw = await serverRead('.arbiter/order-result.json', this.rootPath);
+    try { return raw ? JSON.parse(raw) : null; } catch { return null; }
+  }
+
+  async clearOrderResult(): Promise<void> {
+    // No easy delete via the server API — write empty sentinel
+    await serverWrite('.arbiter/order-result.json', 'null', this.rootPath);
+  }
+
+  // ── Conductor session ─────────────────────────────────────────────────────
+
+  async readConductorSession(taskId: string): Promise<ConductorSession | null> {
+    const raw = await serverRead(`.arbiter/conductor-sessions/${taskId}.json`, this.rootPath);
+    try { return raw ? JSON.parse(raw) : null; } catch { return null; }
+  }
+
+  async writeConductorSession(taskId: string, session: ConductorSession): Promise<void> {
+    await serverWrite(`.arbiter/conductor-sessions/${taskId}.json`, JSON.stringify(session, null, 2), this.rootPath);
+  }
+
+  async writeGateApproval(taskId: string, gate: GateName, decision: 'approved' | 'rejected'): Promise<void> {
+    await serverWrite(`.arbiter/gate-approvals/${taskId}-${gate}.json`, JSON.stringify({
+      task_id: taskId,
+      gate,
+      decision,
+      decided_at: new Date().toISOString(),
+    }, null, 2), this.rootPath);
+  }
+}

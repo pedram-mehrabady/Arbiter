@@ -1,0 +1,112 @@
+.gateModal {
+  max-width: 580px;
+}
+
+.summary {
+  font-size: 14px;
+  color: var(--fg);
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+.checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.checkItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg2);
+}
+
+.check_pass  { border-color: rgba(104, 211, 145, 0.3); background: rgba(104, 211, 145, 0.05); }
+.check_warn  { border-color: rgba(246, 173, 85, 0.3);  background: rgba(246, 173, 85, 0.05);  }
+.check_fail  { border-color: rgba(252, 129, 74, 0.3);  background: rgba(252, 129, 74, 0.05);  }
+
+.checkIcon {
+  font-size: 14px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.checkLabel {
+  font-size: 13px;
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.checkDetail {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+
+.explanation {
+  font-size: 12px;
+  color: var(--muted);
+  border-left: 3px solid var(--border);
+  padding-left: 12px;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+.gateActions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.blockNote {
+  font-size: 12px;
+  color: #fc8181;
+  padding: 8px 12px;
+  background: rgba(252, 129, 74, 0.1);
+  border-radius: 6px;
+  width: 100%;
+}
+
+.warnNote {
+  font-size: 12px;
+  color: #f6ad55;
+}
+
+.question {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--fg);
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+.whyAsking {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 16px;
+  font-style: italic;
+}
+
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.optionBtn {
+  text-align: left;
+  justify-content: flex-start;
+}
+
+.freeTextWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}

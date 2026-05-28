@@ -1,0 +1,691 @@
+/* ── Shell ────────────────────────────────────────────────────────────────── */
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.header {
+  padding: 20px 28px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.headerTitle { font-size: 20px; font-weight: 800; color: var(--text); margin-bottom: 3px; }
+.headerSub   { font-size: 12px; color: var(--muted); }
+.headerSub code { font-family: monospace; background: var(--bg2); padding: 1px 5px; border-radius: 3px; }
+.connectedHint { color: var(--accent); font-weight: 600; }
+
+/* ── Template toggle ─────────────────────────────────────────────────────── */
+.templateRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+.templateLabel {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--muted);
+  margin-right: 2px;
+}
+.templateBtn {
+  padding: 6px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg2);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all .15s;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.templateBtn:hover { border-color: var(--accent); color: var(--text); }
+.templateBtnActive {
+  border-color: var(--accent);
+  background: var(--surface);
+  color: var(--accent);
+}
+.templateCount {
+  font-size: 10px;
+  font-weight: 800;
+  background: var(--bg2);
+  border-radius: 10px;
+  padding: 1px 6px;
+  color: var(--muted);
+}
+.templateBtnActive .templateCount {
+  background: rgba(99,102,241,.12);
+  color: var(--accent);
+}
+
+/* ── Doc viewer popup ────────────────────────────────────────────────────── */
+.docPopupOverlay {
+  position: fixed; inset: 0; z-index: 2000;
+  background: rgba(0,0,0,.55); backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 32px;
+}
+
+.docPopup {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  width: 100%; max-width: 780px;
+  max-height: 88vh;
+  box-shadow: 0 32px 64px rgba(0,0,0,.5);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+
+.docPopupHeader {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 16px 18px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg2);
+  flex-shrink: 0;
+}
+
+.docPopupTitle {
+  display: flex; align-items: center; gap: 8px;
+  flex: 1; min-width: 0;
+}
+
+.docPopupIcon { font-size: 16px; flex-shrink: 0; }
+
+.docPopupName {
+  font-size: 15px; font-weight: 800; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.docPopupPath {
+  font-size: 10px; font-family: monospace;
+  color: var(--muted);
+  padding: 0 18px 10px;
+  margin-top: -6px;
+  flex-shrink: 0;
+  width: 100%;
+  box-sizing: border-box;
+  order: 10;
+}
+
+.docPopupClose {
+  flex-shrink: 0;
+  background: none; border: 1px solid var(--border); color: var(--muted);
+  font-size: 13px; cursor: pointer; padding: 3px 8px; border-radius: 6px;
+  transition: all .15s; font-family: inherit;
+}
+.docPopupClose:hover { background: var(--bg); color: var(--text); }
+
+.docPopupBody {
+  flex: 1; overflow-y: auto;
+  padding: 0;
+}
+
+.docPopupLoading {
+  display: flex; align-items: center; gap: 12px;
+  padding: 40px; color: var(--muted); font-size: 13px;
+}
+
+.docSpinner {
+  width: 18px; height: 18px; border-radius: 50%;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  animation: spin .7s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.docPopupMissing {
+  padding: 32px 24px;
+  font-size: 13px; color: var(--muted); line-height: 1.6;
+  text-align: center;
+}
+
+.docPopupContent {
+  margin: 0;
+  padding: 20px 24px;
+  font-size: 13px; line-height: 1.7;
+  color: var(--text);
+  font-family: inherit;
+  white-space: pre-wrap; word-break: break-word;
+  tab-size: 2;
+}
+
+.docPopupCode {
+  font-family: monospace;
+  font-size: 12px;
+  background: #1e1e2e;
+  color: #cdd6f4;
+  padding: 20px 24px;
+}
+
+.content {
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+/* ── User entry node ─────────────────────────────────────────────────────── */
+.userNode {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.userCircle {
+  width: 64px; height: 64px; border-radius: 50%;
+  background: var(--surface);
+  border: 2px dashed var(--accent);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px;
+}
+.userLabel { font-size: 16px; font-weight: 700; color: var(--text); }
+.userSub   {
+  font-size: 11px; color: var(--muted);
+  text-align: center; max-width: 420px; line-height: 1.5;
+}
+.userSub code { font-family: monospace; background: var(--bg2); padding: 1px 4px; border-radius: 3px; }
+
+.entryCmd {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 6px;
+  background: #1e1e2e;
+  border-radius: 8px;
+  padding: 8px 14px;
+}
+.entryCmd code { font-family: monospace; font-size: 12px; color: #a6e3a1; }
+.entryCmdNote  { font-size: 11px; color: #6e7a8a; }
+
+.factoryExplainer {
+  width: 100%;
+  max-width: 980px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.explainerRow {
+  display: grid;
+  gap: 12px;
+  /* default: two side-by-side columns */
+  grid-template-columns: 1fr 1fr;
+}
+
+.explainerRow3 {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.explainerBlock {
+  background: #12121e;
+  border: 1px solid #252540;
+  border-radius: 10px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.explainerIcon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.explainerTitle {
+  font-size: 12px;
+  font-weight: 700;
+  color: #c8cee8;
+  letter-spacing: 0.02em;
+}
+
+.explainerBody {
+  font-size: 11.5px;
+  color: #7a82a0;
+  line-height: 1.7;
+}
+
+.explainerBody code {
+  font-family: monospace;
+  font-size: 10.5px;
+  color: #a6b4d8;
+  background: rgba(255,255,255,0.06);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+@media (max-width: 900px) {
+  .explainerRow,
+  .explainerRow3 { grid-template-columns: 1fr; }
+}
+
+.downArrow {
+  font-size: 22px; color: var(--muted);
+  padding: 10px 0; line-height: 1;
+}
+
+/* ── Phase group ─────────────────────────────────────────────────────────── */
+.phaseGroup {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 1160px;
+  gap: 0;
+}
+
+.phaseLabel {
+  font-size: 10px; font-weight: 800; letter-spacing: .1em;
+  text-transform: uppercase;
+  border: 1px solid;
+  border-radius: 20px;
+  padding: 3px 14px;
+  margin-bottom: 12px;
+  background: var(--surface);
+}
+
+.phaseAgents {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 0;
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+.agentWithArrow {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex: 1;
+  min-width: 320px;
+  gap: 0;
+}
+
+.rightArrow {
+  font-size: 20px; color: var(--muted);
+  padding: 0 8px; flex-shrink: 0;
+}
+
+/* ── Agent section ───────────────────────────────────────────────────────── */
+.agentSection {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.agentLabel {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  transform: rotate(180deg);
+  font-size: 9px; font-weight: 800; letter-spacing: .1em;
+  color: #fff;
+  padding: 14px 9px;
+  min-width: 32px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+.agentBody {
+  flex: 1; min-width: 0;
+  padding: 14px 14px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.agentHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.agentRole {
+  font-size: 11px; color: var(--muted); line-height: 1.4;
+  flex: 1;
+}
+
+.agentModel {
+  font-size: 10px; font-family: monospace;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 2px 7px;
+  color: var(--muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Steps row ───────────────────────────────────────────────────────────── */
+.stepsRow {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  flex-wrap: wrap;
+}
+
+.stepWrap {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex: 1;
+  min-width: 200px;
+}
+
+.arrow {
+  font-size: 16px; color: var(--muted);
+  padding: 0 6px; flex-shrink: 0;
+}
+
+/* ── Step card ───────────────────────────────────────────────────────────── */
+.stepCard {
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  background: var(--bg2);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.stepCardGate {
+  border-color: #f59e0b;
+  background: #fef3c710;
+}
+
+.stepCardCond {
+  border-color: #6366f1;
+  background: rgba(99,102,241,.05);
+  border-style: dashed;
+}
+
+.stepHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.stepPhase {
+  font-size: 9px; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--muted);
+}
+
+.modeBadge {
+  font-size: 8px; font-weight: 800; letter-spacing: .08em;
+  text-transform: uppercase;
+  padding: 2px 6px; border-radius: 4px;
+  flex-shrink: 0;
+}
+.modeAuto { background: rgba(16,185,129,.15); color: #059669; }
+.modeGate { background: rgba(245,158,11,.20); color: #b45309; }
+.modeCond { background: rgba(99,102,241,.15); color: #6366f1; }
+
+.stepTitle {
+  font-size: 12px; font-weight: 700; color: var(--text);
+}
+
+.stepDesc {
+  font-size: 11px; color: var(--muted); line-height: 1.5;
+}
+
+.gateTag {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 10px;
+  background: rgba(245,158,11,.1);
+  border: 1px solid rgba(245,158,11,.3);
+  border-radius: 5px;
+  padding: 3px 7px;
+}
+.gateIcon { font-size: 10px; }
+.gateTag code { font-family: monospace; font-size: 10px; color: #b45309; }
+
+.expandBtn {
+  align-self: flex-start;
+  font-size: 10px; font-weight: 600;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 3px 8px;
+  color: var(--muted);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all .15s;
+  margin-top: 2px;
+}
+.expandBtn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── Step expanded detail ────────────────────────────────────────────────── */
+.stepDetail {
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.detailSection { display: flex; flex-direction: column; gap: 4px; }
+
+.detailLabel {
+  font-size: 9px; font-weight: 700; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--muted);
+}
+
+.fileList {
+  margin: 0; padding: 0;
+  list-style: none;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.fileList li code {
+  font-family: monospace; font-size: 10px;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+  display: inline-block;
+  word-break: break-all;
+}
+
+/* Clickable file paths */
+.filePathBtn {
+  font-family: monospace; font-size: 10px;
+  color: var(--accent);
+  background: rgba(99,102,241,.07);
+  border: 1px solid rgba(99,102,241,.25);
+  border-radius: 3px;
+  padding: 2px 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all .15s;
+  word-break: break-all;
+  text-align: left;
+  display: inline-block;
+}
+.filePathBtn:hover { background: rgba(99,102,241,.18); border-color: var(--accent); }
+
+.filePathStatic {
+  font-family: monospace; font-size: 10px;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+  display: inline-block;
+  word-break: break-all;
+}
+
+.filePathArrow { font-size: 9px; opacity: 0.7; margin-left: 3px; }
+
+/* Clickable path in agent footer doc row */
+.docPathBtn {
+  flex: 1;
+  font-family: monospace; font-size: 10px;
+  color: var(--accent);
+  background: rgba(99,102,241,.07);
+  border: 1px solid rgba(99,102,241,.2);
+  border-radius: 4px;
+  padding: 3px 7px;
+  cursor: pointer;
+  text-align: left;
+  word-break: break-all;
+  transition: all .15s;
+}
+.docPathBtn:hover { background: rgba(99,102,241,.18); border-color: var(--accent); }
+
+.detailNote {
+  font-size: 10px; color: var(--muted); line-height: 1.5;
+  border-left: 2px solid var(--border);
+  padding-left: 8px;
+  font-style: italic;
+}
+
+/* ── Agent footer (docs + terminal) ────────────────────────────────────────── */
+.agentFooter {
+  border-top: 1px solid var(--border);
+  margin-top: 2px;
+  padding: 10px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.footerToggle {
+  display: flex; align-items: center; justify-content: space-between;
+  background: none; border: none; cursor: pointer;
+  font-size: 11px; color: var(--muted); font-family: inherit;
+  padding: 6px 0; text-align: left; width: 100%;
+  transition: color .15s;
+}
+.footerToggle:hover { color: var(--text); }
+.toggleCaret { font-size: 9px; }
+
+/* Docs expanded */
+.docsExpanded {
+  margin-bottom: 8px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.docRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.docRow:last-child { border-bottom: none; }
+
+.docType {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--muted);
+  min-width: 68px; flex-shrink: 0;
+}
+
+.docPath {
+  flex: 1; font-family: monospace; font-size: 10px;
+  color: var(--text); word-break: break-all;
+}
+
+.docCopy {
+  flex-shrink: 0;
+  padding: 3px 8px; border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted); font-size: 10px; font-weight: 600;
+  font-family: inherit; cursor: pointer; transition: all .15s;
+}
+.docCopy:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Terminal expanded */
+.terminalExpanded {
+  margin-bottom: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.terminalNote {
+  padding: 8px 12px;
+  font-size: 11px; color: var(--muted); line-height: 1.5;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+}
+
+.terminalCmdRow {
+  display: flex;
+  align-items: stretch;
+  background: #1e1e2e;
+}
+
+.terminalPre {
+  flex: 1; margin: 0;
+  padding: 10px 14px;
+  font-family: monospace; font-size: 12px; line-height: 1.6;
+  color: #a6e3a1;
+  overflow-x: auto;
+  white-space: pre-wrap; word-break: break-all;
+}
+
+.terminalCopy {
+  flex-shrink: 0;
+  padding: 0 14px;
+  border: none; border-left: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.04);
+  color: #6e7a8a; font-size: 11px; font-weight: 600;
+  font-family: inherit; cursor: pointer; transition: all .15s;
+}
+.terminalCopy:hover { background: rgba(255,255,255,.1); color: #a6e3a1; }
+
+/* ── Merge node ──────────────────────────────────────────────────────────── */
+.mergeNode {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 20px;
+  border: 1px solid var(--accent);
+  border-radius: 20px;
+  background: rgba(99,102,241,.08);
+  margin: 4px 0;
+}
+.mergeIcon  { font-size: 16px; color: var(--accent); }
+.mergeLabel { font-size: 13px; font-weight: 700; color: var(--accent); }
+
+/* ── Surveyor (scheduled) ────────────────────────────────────────────────── */
+.surveyorWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%; max-width: 1160px;
+  opacity: 0.8;
+}
+
+.surveyorBadge {
+  font-size: 10px; font-weight: 800; letter-spacing: .1em;
+  text-transform: uppercase;
+  border: 1px dashed var(--muted);
+  border-radius: 20px;
+  padding: 3px 14px;
+  color: var(--muted);
+  background: var(--surface);
+}

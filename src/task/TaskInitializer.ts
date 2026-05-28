@@ -1,13 +1,13 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { SubTaskEntry, TaskState, AgentRole, ServiceResult } from '../types/index';
+import { SubTaskEntry, TaskState, AgentRole, PipelineName, ServiceResult } from '../types/index';
 import { StateStore } from '../state/StateStore';
 import { DecisionLog } from '../decisions/DecisionLog';
 
-// Standard pipeline order with dependency graph.
-// The plan agent fills in granular implementation sub-tasks later; these are
-// the 11 agent invocations that every feature goes through.
-const STANDARD_PIPELINE: Array<{ id: string; role: AgentRole; dependsOn: string[] }> = [
+type PipelineStep = { id: string; role: AgentRole; dependsOn: string[] };
+
+// Standard 11-agent pipeline — deep research, architecture gates, full review chain.
+const STANDARD_PIPELINE: PipelineStep[] = [
   { id: 'reframe',       role: 'reframe',       dependsOn: [] },
   { id: 'research',      role: 'research',      dependsOn: ['reframe'] },
   { id: 'design',        role: 'design',        dependsOn: ['research'] },
@@ -21,11 +21,28 @@ const STANDARD_PIPELINE: Array<{ id: string; role: AgentRole; dependsOn: string[
   { id: 'tech-writer',   role: 'tech-writer',   dependsOn: ['reviewer'] },
 ];
 
+// Fast 5-agent pipeline — prd gathers requirements, then frontend + backend
+// run in parallel, test-writer covers both, push validates and finalises.
+// Same gates, receipts, and evidence generation as standard — just fewer agents.
+const FAST_PIPELINE: PipelineStep[] = [
+  { id: 'prd',         role: 'prd',         dependsOn: [] },
+  { id: 'frontend',    role: 'frontend',    dependsOn: ['prd'] },
+  { id: 'backend',     role: 'backend',     dependsOn: ['prd'] },
+  { id: 'test-writer', role: 'test-writer', dependsOn: ['frontend', 'backend'] },
+  { id: 'push',        role: 'push',        dependsOn: ['test-writer'] },
+];
+
+const PIPELINES: Record<PipelineName, PipelineStep[]> = {
+  standard: STANDARD_PIPELINE,
+  fast:     FAST_PIPELINE,
+};
+
 export interface InitOptions {
   taskId: string;
   specFile: string;
   workspaceRoot: string;
   skipAgents?: AgentRole[];
+  pipeline?: PipelineName;
 }
 
 export interface InitResult {
@@ -46,24 +63,18 @@ export class TaskInitializer {
   }
 
   async init(opts: InitOptions): Promise<ServiceResult<InitResult>> {
-    // Guard: don't overwrite existing state unless it's a clean task
-    const exists = await this.stateStore.exists();
+    const pipelineName: PipelineName = opts.pipeline ?? 'standard';
+    // Use per-task state path so multiple tasks can coexist without conflict.
+    const taskStateStore = new StateStore(opts.workspaceRoot, opts.taskId);
+
+    // Guard: don't overwrite an existing state for the same task id
+    const exists = await taskStateStore.exists();
     if (exists) {
-      const existing = await this.stateStore.read();
-      if (existing.ok && existing.value.task_id !== opts.taskId) {
-        return {
-          ok: false,
-          error: `State file already exists for task "${existing.value.task_id}". Delete .arbiter/state.json to init a new task.`,
-          code: 'STATE_EXISTS',
-        };
-      }
-      if (existing.ok && existing.value.task_id === opts.taskId) {
-        return {
-          ok: false,
-          error: `Task ${opts.taskId} already initialized. Use --resume to continue.`,
-          code: 'ALREADY_INIT',
-        };
-      }
+      return {
+        ok: false,
+        error: `Task ${opts.taskId} already initialized. Use --resume to continue.`,
+        code: 'ALREADY_INIT',
+      };
     }
 
     // Read spec file
@@ -83,57 +94,56 @@ export class TaskInitializer {
       return { ok: false, error: `Failed to create task directory: ${String(err)}` };
     }
 
-    // Build sub-task entries
+    // Build sub-task entries from the selected pipeline
+    const sourcePipeline = PIPELINES[pipelineName];
     const skipSet = new Set<string>(opts.skipAgents ?? []);
-    const pipeline = STANDARD_PIPELINE.filter(s => !skipSet.has(s.role));
+    const pipeline = sourcePipeline.filter(s => !skipSet.has(s.role));
 
     const subTasks: Record<string, SubTaskEntry> = {};
     for (const step of pipeline) {
       const filteredDeps = step.dependsOn.filter(dep => {
-        // Only include deps that survived the skip filter
-        const depStep = STANDARD_PIPELINE.find(s => s.id === dep);
+        const depStep = sourcePipeline.find(s => s.id === dep);
         return depStep ? !skipSet.has(depStep.role) : false;
       });
 
       subTasks[step.id] = {
         status: 'pending',
         agent_role: step.role,
-        model: '',        // Conductor resolves from config at runtime
+        model: '',
         depends_on: filteredDeps.length > 0 ? filteredDeps : undefined,
       };
     }
 
-    // Write initial state
-    const stateResult = await this.stateStore.init(opts.taskId, subTasks);
+    // Write initial state to the task-scoped path
+    const stateResult = await taskStateStore.init(opts.taskId, subTasks);
     if (!stateResult.ok) return stateResult;
 
     await this.decisionLog.append({
       task_id: opts.taskId,
       event: 'task_init',
-      detail: `spec=${opts.specFile} sub_tasks=${Object.keys(subTasks).length}`,
+      detail: `spec=${opts.specFile} pipeline=${pipelineName} sub_tasks=${Object.keys(subTasks).length}`,
     });
 
-    const stateFile = path.join(opts.workspaceRoot, '.arbiter', 'state.json');
     return {
       ok: true,
       value: {
         taskId: opts.taskId,
         taskDir,
-        stateFile,
+        stateFile: taskStateStore.filePath,
         subTaskCount: Object.keys(subTasks).length,
         pipeline,
       },
     };
   }
 
-  // Returns the standard pipeline for display purposes
-  static describePipeline(skipAgents: AgentRole[] = []): string {
+  static describePipeline(skipAgents: AgentRole[] = [], pipelineName: PipelineName = 'standard'): string {
+    const sourcePipeline = PIPELINES[pipelineName];
     const skipSet = new Set(skipAgents);
-    const lines = STANDARD_PIPELINE
+    const lines = sourcePipeline
       .filter(s => !skipSet.has(s.role))
       .map((s, i) => {
         const deps = s.dependsOn.filter(d => {
-          const step = STANDARD_PIPELINE.find(p => p.id === d);
+          const step = sourcePipeline.find(p => p.id === d);
           return step ? !skipSet.has(step.role) : false;
         });
         const depStr = deps.length > 0 ? ` (after: ${deps.join(', ')})` : '';

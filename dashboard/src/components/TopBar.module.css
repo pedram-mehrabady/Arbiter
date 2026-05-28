@@ -1,0 +1,56 @@
+.bar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 24px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0;
+}
+
+.left  { display: flex; flex-direction: column; flex-shrink: 0; }
+.title { font-size: 14px; font-weight: 800; color: var(--text); letter-spacing: -.01em; }
+.sub   { font-size: 10px; color: var(--muted); margin-top: 1px; }
+
+.center { flex: 1; display: flex; justify-content: center; }
+
+.watcherPill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px 6px 10px;
+  background: #fffbeb; border: 1px solid #fde68a;
+  border-radius: 20px; cursor: pointer; font-size: 11px; font-weight: 600;
+  color: #d97706; transition: background .12s; white-space: nowrap; font-family: inherit;
+}
+.watcherPill:hover { background: #fef9c3; }
+.watcherDot  { width: 6px; height: 6px; border-radius: 50%; background: #f59e0b; flex-shrink: 0; animation: pulse 2s infinite; }
+.watcherArrow { opacity: .7; }
+
+.right  { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+
+.profileBtn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 10px; background: transparent;
+  border: 1px solid var(--border); border-radius: 99px;
+  font-size: 11px; font-weight: 600; color: var(--muted);
+  cursor: pointer; font-family: inherit; transition: background .12s, color .12s;
+  white-space: nowrap;
+}
+.profileBtn:hover { background: var(--bg2); color: var(--text); }
+
+.modeBadge { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+
+.status {
+  display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--muted);
+  padding: 5px 12px; background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 99px; white-space: nowrap;
+}
+.connected { color: var(--green); border-color: rgba(22,163,74,.3); background: var(--green-dim); }
+.statusDot { width: 6px; height: 6px; border-radius: 50%; background: #d1d5db; flex-shrink: 0; }
+.connected .statusDot { background: var(--green); animation: pulse 2s infinite; }
+
+.connectBtn {
+  background: var(--accent); border: none; color: #fff;
+  font-size: 11px; font-weight: 700; padding: 7px 14px; border-radius: var(--radius-sm);
+  cursor: pointer; font-family: inherit; transition: background .15s; white-space: nowrap;
+}
+.connectBtn:hover { background: #4f46e5; }
+
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }

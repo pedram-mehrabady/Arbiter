@@ -1,0 +1,67 @@
+{
+  "auto_merge": false,
+  "gates": {
+    "design": true,
+    "plan": true,
+    "review": true
+  },
+  "template_vars": {
+    "PROJECT_NAME": "arbiter"
+  },
+  "providers": {
+    "claude_max_cli": {
+      "cmd": "claude",
+      "headless_flag": "-p"
+    }
+  },
+  "roles": {
+    "reframe": {
+      "provider": "claude_max_cli",
+      "model": "claude-opus-4-7"
+    },
+    "research": {
+      "provider": "claude_max_cli",
+      "model": "claude-opus-4-7"
+    },
+    "design": {
+      "provider": "claude_max_cli",
+      "model": "claude-opus-4-7"
+    },
+    "design-critic": {
+      "provider": "claude_max_cli",
+      "model": "claude-opus-4-7"
+    },
+    "integrator": {
+      "provider": "claude_max_cli",
+      "model": "claude-opus-4-7"
+    },
+    "plan": {
+      "provider": "claude_max_cli",
+      "model": "claude-opus-4-7"
+    },
+    "frontend": {
+      "provider": "claude_max_cli",
+      "model": "claude-opus-4-7"
+    },
+    "backend": {
+      "provider": "claude_max_cli",
+      "model": "claude-opus-4-7"
+    },
+    "test-writer": {
+      "provider": "claude_max_cli",
+      "model": "claude-opus-4-7"
+    },
+    "reviewer": {
+      "provider": "claude_max_cli",
+      "model": "claude-opus-4-7"
+    },
+    "tech-writer": {
+      "provider": "claude_max_cli",
+      "model": "claude-opus-4-7"
+    },
+    "debugger": {
+      "provider": "claude_max_cli",
+      "model": "claude-opus-4-7"
+    }
+  }
+}
