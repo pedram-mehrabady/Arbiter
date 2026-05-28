@@ -36,6 +36,7 @@ import { EvidenceCache, parseBlastRadius } from '../evidence/EvidenceCache';
 import { OpenAIProvider } from '../providers/OpenAIProvider';
 import { GeminiProvider } from '../providers/GeminiProvider';
 import { WebhookNotifier } from '../notifications/WebhookNotifier';
+import { TelegramNotifier } from '../notifications/TelegramNotifier';
 import { GitAutoCommit } from '../git/GitAutoCommit';
 import { WorktreeManager } from '../git/WorktreeManager';
 import { TriageRunner } from '../triage/TriageRunner';
@@ -78,6 +79,7 @@ export class Conductor {
   private notifier: WebhookNotifier | undefined;
   private gitAutoCommit: GitAutoCommit | undefined;
   readonly worktreeManager: WorktreeManager;
+  private readonly telegram = new TelegramNotifier();
 
   constructor(options: ConductOptions) {
     this.options = options;
@@ -198,7 +200,7 @@ export class Conductor {
       }
 
       try {
-        const funnel = new IronFunnel(this.sqliteStore, this.provider, this.config, worktreePath);
+        const funnel = new IronFunnel(this.sqliteStore, this.provider, this.config, worktreePath, this.telegram);
         const funnelResult = await funnel.run(taskId, worktreePath, { tier: taskTier });
 
         await this.decisionLog.append({
@@ -209,6 +211,7 @@ export class Conductor {
 
         if (!funnelResult.passed) {
           this.sqliteStore.upsertTask({ task_id: taskId, status: 'failed' });
+          void this.telegram.send(`❌ *${taskId}* failed at Iron Funnel gate ${funnelResult.failureGate}.`, 'owner');
           return {
             ok: false,
             error: `Iron Funnel failed at gate ${funnelResult.failureGate}. See DecisionLog for details.`,
@@ -222,6 +225,7 @@ export class Conductor {
           if (pr.ok) {
             this.sqliteStore.appendEvent(taskId, 'pr_opened', { url: pr.value, branch: branchName });
             await this.decisionLog.append({ task_id: taskId, event: 'pr_opened', detail: pr.value.slice(0, 300) });
+            void this.telegram.send(`✅ *${taskId}* passed all gates. PR opened:\n${pr.value}`, 'owner');
           } else {
             this.sqliteStore.appendEvent(taskId, 'pr_open_failed', { error: pr.error, branch: branchName });
             await this.decisionLog.append({ task_id: taskId, event: 'pr_open_failed', detail: pr.error.slice(0, 300) });

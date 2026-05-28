@@ -6,6 +6,7 @@ import { IronFunnelGateResult, FactoryConfig } from '../types/index';
 import { CompilerAirlockGate } from '../gates/CompilerAirlockGate';
 import { ProvingGroundGate, CoverageFloors } from '../gates/ProvingGroundGate';
 import { OrchestratorDispatcher } from '../orchestrator/OrchestratorDispatcher';
+import { Notifier, NO_OP_NOTIFIER } from '../notifications/TelegramNotifier';
 
 export interface IronFunnelResult {
   passed: boolean;
@@ -39,6 +40,7 @@ export class IronFunnel {
     private readonly provider: LLMProvider,
     private readonly config: FactoryConfig,
     private readonly workspaceRoot: string = '',
+    private readonly notifier: Notifier = NO_OP_NOTIFIER,
   ) {
     this.compilerAirlock = new CompilerAirlockGate();
     this.provingGround = new ProvingGroundGate();
@@ -643,10 +645,13 @@ export class IronFunnel {
 
   private checkTimeoutThresholds(taskId: string, elapsedMs: number): void {
     const hours = elapsedMs / 3_600_000;
+    const h = hours.toFixed(1);
     if (hours >= ESCALATE_HOURS) {
       this.sqliteStore.appendEvent(taskId, 'gate_timeout_escalation', { elapsed_hours: hours });
+      void this.notifier.send(`🚨 *${taskId}* — Iron Funnel open ${h}h (≥${ESCALATE_HOURS}h). Escalating.`, 'tech_lead');
     } else if (hours >= WARN_HOURS) {
       this.sqliteStore.appendEvent(taskId, 'gate_timeout_warning', { elapsed_hours: hours });
+      void this.notifier.send(`⏳ *${taskId}* — Iron Funnel open ${h}h (≥${WARN_HOURS}h). May need a look.`, 'owner');
     }
   }
 }

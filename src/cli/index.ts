@@ -114,6 +114,27 @@ program
       }
     }
 
+    // Telegram admin config is optional and personal — never committed. If absent,
+    // print setup instructions but do not block init.
+    if (homeDir) {
+      const adminConfigPath = path.join(homeDir, '.arbiter', 'admin.config.json');
+      try {
+        await fs.access(adminConfigPath);
+      } catch {
+        console.log(
+          '\nℹ Optional: enable Telegram notifications (gate timeouts, task complete/fail).\n' +
+          `  Create ${adminConfigPath} with:\n` +
+          '    {\n' +
+          '      "telegram": {\n' +
+          '        "bot_token": "<from @BotFather>",\n' +
+          '        "owner_chat_id": "<your chat id>",\n' +
+          '        "tech_lead_chat_id": "<optional, for 8h escalations>"\n' +
+          '      }\n' +
+          '    }\n',
+        );
+      }
+    }
+
     console.log('\n✓ Arbiter initialised.\n\nNext steps:\n  Create a task: echo "Add login feature" > task.md\n  Run it:        arbiter run task.md\n  Dashboard:     arbiter dashboard\n');
   });
 
