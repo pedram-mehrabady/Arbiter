@@ -15,6 +15,55 @@
 .headerSub code { font-family: monospace; background: var(--bg2); padding: 1px 5px; border-radius: 3px; }
 .connectedHint { color: var(--accent); font-weight: 600; }
 
+/* ── Template toggle ─────────────────────────────────────────────────────── */
+.templateRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+.templateLabel {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--muted);
+  margin-right: 2px;
+}
+.templateBtn {
+  padding: 6px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg2);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all .15s;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.templateBtn:hover { border-color: var(--accent); color: var(--text); }
+.templateBtnActive {
+  border-color: var(--accent);
+  background: var(--surface);
+  color: var(--accent);
+}
+.templateCount {
+  font-size: 10px;
+  font-weight: 800;
+  background: var(--bg2);
+  border-radius: 10px;
+  padding: 1px 6px;
+  color: var(--muted);
+}
+.templateBtnActive .templateCount {
+  background: rgba(99,102,241,.12);
+  color: var(--accent);
+}
+
 /* ── Doc viewer popup ────────────────────────────────────────────────────── */
 .docPopupOverlay {
   position: fixed; inset: 0; z-index: 2000;

@@ -435,6 +435,165 @@ function buildPhaseGroups(
 
 }
 
+// ── Compact template (5-agent) ────────────────────────────────────────────────
+
+function buildCompactPhaseGroups(
+  execPlanDir: string,
+  agentsDir: string,
+  manifestsDir: string,
+): PhaseGroup[] {
+  const taskPath = `${execPlanDir}/02-active/<task-id>`;
+  return [
+    {
+      phase: 'Phase 1 — Brainstorm',
+      color: '#8b5cf6',
+      agents: [
+        {
+          key: 'brainstorming',
+          label: 'BRAINSTORMING',
+          emoji: '💡',
+          color: '#8b5cf6',
+          model: 'claude-opus-4-7',
+          role: 'Clarifies scope, surfaces edge cases, and produces a concise build plan for all downstream agents',
+          ruleBook: `${agentsDir}/brainstorming.md`,
+          manifest: `${manifestsDir}/brainstorming.manifest.yaml`,
+          terminalCmd: `scripts/spawn-agent.sh brainstorming ${taskPath}`,
+          terminalNote: 'Single planning agent — replaces the reframe/question/research/design/plan chain. Produces approach.md which the build agents use as their sole instruction.',
+          steps: [
+            {
+              phase: 'Step 1',
+              title: 'Understand spec + write build plan',
+              mode: 'auto',
+              description: 'Reads spec.md, challenges assumptions, identifies the minimal correct solution, and writes approach.md: what to build, how to split FE/BE work, key data shapes, acceptance criteria, and file allowlists for each coder.',
+              reads: ['spec.md', 'MASTER-DIRECTIVES.md'],
+              writes: ['approach.md (scope, FE/BE split, data shapes, acceptance criteria, file allowlists)'],
+            },
+            {
+              phase: 'Gate — Plan review',
+              title: 'Review the plan before building',
+              mode: 'gate',
+              description: 'The Conductor walks you through approach.md. Chat about scope, approach, or anything unclear before any code is written. Approve to start the build.',
+              reads: ['approach.md'],
+              writes: ['.arbiter/gate-approvals/<id>-plan.json'],
+              notes: 'Approve via the Arbiter dashboard conductor chat.',
+            },
+          ],
+        },
+      ],
+    },
+    {
+      phase: 'Phase 2 — Build',
+      color: '#10b981',
+      agents: [
+        {
+          key: 'frontend',
+          label: 'FRONTEND',
+          emoji: '⚛️',
+          color: '#10b981',
+          model: 'claude-sonnet-4-6',
+          role: 'Builds all UI components, hooks, state, and service layer from approach.md',
+          ruleBook: `${agentsDir}/frontend.md`,
+          manifest: `${manifestsDir}/frontend.manifest.yaml`,
+          terminalCmd: `scripts/spawn-agent.sh frontend ${taskPath}`,
+          terminalNote: 'Bounded by the file allowlist in approach.md. Must pass typecheck + lint before finishing.',
+          steps: [
+            {
+              phase: 'Step 2',
+              title: 'Build frontend',
+              mode: 'auto',
+              description: 'Implements all UI components, Zustand stores, hooks, and service calls exactly as described in approach.md. Stays within the file allowlist.',
+              reads: ['approach.md', 'MASTER-DIRECTIVES.md'],
+              writes: ['src/features/<module>/** (bounded by approach.md allowlist)'],
+              gate: 'npm run typecheck && npm run lint',
+            },
+          ],
+        },
+        {
+          key: 'backend',
+          label: 'BACKEND',
+          emoji: '⚙️',
+          color: '#059669',
+          model: 'claude-sonnet-4-6',
+          role: 'Builds API endpoints, services, and DB layer from approach.md',
+          ruleBook: `${agentsDir}/backend.md`,
+          manifest: `${manifestsDir}/backend.manifest.yaml`,
+          terminalCmd: `scripts/spawn-agent.sh backend ${taskPath}`,
+          terminalNote: 'Runs in parallel with frontend after gate approval. Bounded by approach.md file allowlist. Must pass the API gate.',
+          steps: [
+            {
+              phase: 'Step 3',
+              title: 'Build backend',
+              mode: 'auto',
+              description: 'Implements controllers, services (ServiceResult<T>), and any DB migrations described in approach.md. No cross-module foreign keys. Bounded by file allowlist.',
+              reads: ['approach.md', 'MASTER-DIRECTIVES.md'],
+              writes: ['api/src/** (bounded by approach.md allowlist)'],
+              gate: 'npm run build (or dotnet build)',
+            },
+          ],
+        },
+      ],
+    },
+    {
+      phase: 'Phase 3 — Quality',
+      color: '#f59e0b',
+      agents: [
+        {
+          key: 'test',
+          label: 'TEST',
+          emoji: '🧪',
+          color: '#f59e0b',
+          model: 'claude-sonnet-4-6',
+          role: 'Writes tests for both frontend and backend to coverage floors',
+          ruleBook: `${agentsDir}/test.md`,
+          manifest: `${manifestsDir}/test.manifest.yaml`,
+          terminalCmd: `scripts/spawn-agent.sh test ${taskPath}`,
+          terminalNote: 'Covers both FE (Vitest) and BE (xUnit / Jest) in one pass. Tests hit real logic — no mocks of business code.',
+          steps: [
+            {
+              phase: 'Step 4',
+              title: 'Write tests to coverage floors',
+              mode: 'auto',
+              description: 'Writes unit + integration tests for the code produced in Steps 2 and 3. Tests must reach the coverage floors defined in the project config.',
+              reads: ['approach.md', 'MASTER-DIRECTIVES.md', 'git diff'],
+              writes: ['**/*.test.ts (Vitest)', '**/*Tests.cs or **/*.test.ts (xUnit/Jest)'],
+              gate: 'Coverage floors per project vitest/jest config',
+            },
+          ],
+        },
+      ],
+    },
+    {
+      phase: 'Phase 4 — Ship',
+      color: '#ec4899',
+      agents: [
+        {
+          key: 'push',
+          label: 'PUSH',
+          emoji: '🚀',
+          color: '#ec4899',
+          model: 'claude-opus-4-7',
+          role: 'Final sanity check, PR description, and branch push',
+          ruleBook: `${agentsDir}/push.md`,
+          manifest: `${manifestsDir}/push.manifest.yaml`,
+          terminalCmd: `scripts/spawn-agent.sh push ${taskPath}`,
+          terminalNote: 'Last agent in the pipeline. Verifies the build is green, writes a clear PR description, and pushes the branch.',
+          steps: [
+            {
+              phase: 'Step 5',
+              title: 'Verify, describe, and push',
+              mode: 'auto',
+              description: 'Runs the full build one final time, writes a concise PR description summarising the change, acceptance criteria, and test plan, then pushes the branch.',
+              reads: ['approach.md', 'git diff', 'MASTER-DIRECTIVES.md'],
+              writes: ['PR description (.arbiter/pr-description.md)', 'git push (branch)'],
+              notes: 'If the build is red, push is blocked and the failure is reported back to the conductor for a debugger escalation.',
+            },
+          ],
+        },
+      ],
+    },
+  ];
+}
+
 // Surveyor — scheduled, outside the pipeline
 function buildSurveyor(execPlanDir: string, agentsDir: string, manifestsDir: string): Agent {
   return {
@@ -705,11 +864,15 @@ function AgentSection({ agent, connected, onOpenDoc, os }: {
 
 // ── Main view ─────────────────────────────────────────────────────────────────
 
+type FlowTemplate = 'full' | 'compact';
+
 export function FlowView() {
   const isConnected  = useAppStore((s) => s.isConnected);
   const readRepoFile = useAppStore((s) => s.readRepoFile);
   const os           = useAppStore((s) => s.settings.os);
   const arbiterConfig = useAppStore((s) => s.arbiterConfig);
+
+  const [template, setTemplate] = useState<FlowTemplate>('full');
 
   const execPlanDir  = arbiterConfig.exec_plan_dir;
   const agentsDir    = 'compliance/automation/agents';
@@ -719,10 +882,16 @@ export function FlowView() {
     () => buildPhaseGroups(execPlanDir, agentsDir, manifestsDir),
     [execPlanDir, agentsDir, manifestsDir],
   );
+  const COMPACT_PHASE_GROUPS = useMemo(
+    () => buildCompactPhaseGroups(execPlanDir, agentsDir, manifestsDir),
+    [execPlanDir, agentsDir, manifestsDir],
+  );
   const SURVEYOR = useMemo(
     () => buildSurveyor(execPlanDir, agentsDir, manifestsDir),
     [execPlanDir, agentsDir, manifestsDir],
   );
+
+  const activeGroups = template === 'compact' ? COMPACT_PHASE_GROUPS : PHASE_GROUPS;
 
   const [docPath,    setDocPath]    = useState<string | null>(null);
   const [docContent, setDocContent] = useState<string | null>(null);
@@ -756,9 +925,26 @@ export function FlowView() {
       <div className={css.header}>
         <div className={css.headerTitle}>Factory Pipeline</div>
         <div className={css.headerSub}>
-          13 agents · serial execution · <strong>3 human gates</strong> · persistent Conductor · cross-model audits ·{' '}
-          <code>{shellCmd('scripts/factory.sh run', os)}</code> starts the factory
+          {template === 'full'
+            ? <>13 agents · serial execution · <strong>3 human gates</strong> · persistent Conductor · cross-model audits · <code>{shellCmd('scripts/factory.sh run', os)}</code> starts the factory</>
+            : <>5 agents · brainstorm → build → test → push · <strong>1 human gate</strong> · fast iteration · <code>{shellCmd('scripts/factory.sh run', os)}</code> starts the factory</>
+          }
           {isConnected && <span className={css.connectedHint}> · click any file path to read it</span>}
+        </div>
+        <div className={css.templateRow}>
+          <span className={css.templateLabel}>Template:</span>
+          <button
+            className={`${css.templateBtn}${template === 'full' ? ' ' + css.templateBtnActive : ''}`}
+            onClick={() => setTemplate('full')}
+          >
+            🏭 Full pipeline <span className={css.templateCount}>13 agents</span>
+          </button>
+          <button
+            className={`${css.templateBtn}${template === 'compact' ? ' ' + css.templateBtnActive : ''}`}
+            onClick={() => setTemplate('compact')}
+          >
+            ⚡ Compact <span className={css.templateCount}>5 agents</span>
+          </button>
         </div>
       </div>
 
@@ -777,8 +963,8 @@ export function FlowView() {
           </div>
         </div>
 
-        {/* Explainer cards — direct child of .content so they fill the full width */}
-        <div className={css.factoryExplainer} style={{ width: '100%', maxWidth: 980, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {/* Explainer cards — full pipeline only */}
+        {template === 'full' && <div className={css.factoryExplainer} style={{ width: '100%', maxWidth: 980, display: 'flex', flexDirection: 'column', gap: 10 }}>
           {/* Row 1 — runtime mechanics: two side-by-side columns */}
           <div className={css.explainerRow} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div className={css.explainerBlock}>
@@ -822,12 +1008,12 @@ export function FlowView() {
               </div>
             </div>
           </div>
-        </div>
+        </div>}
 
         <div className={css.downArrow}>↓</div>
 
-        {/* Phase groups */}
-        {PHASE_GROUPS.map((group, gi) => (
+        {/* Phase groups — driven by active template */}
+        {activeGroups.map((group, gi) => (
           <div key={group.phase} className={css.phaseGroup}>
             <div className={css.phaseLabel} style={{ borderColor: group.color, color: group.color }}>
               {group.phase}
@@ -840,7 +1026,7 @@ export function FlowView() {
                 </div>
               ))}
             </div>
-            {gi < PHASE_GROUPS.length - 1 && <div className={css.downArrow}>↓</div>}
+            {gi < activeGroups.length - 1 && <div className={css.downArrow}>↓</div>}
           </div>
         ))}
 
@@ -852,13 +1038,15 @@ export function FlowView() {
           <span className={css.mergeLabel}>PR merged · lessons loop closes</span>
         </div>
 
-        <div className={css.downArrow} style={{ opacity: 0.4 }}>↓ nightly</div>
-
-        {/* Surveyor */}
-        <div className={css.surveyorWrap}>
-          <div className={css.surveyorBadge}>SCHEDULED</div>
-          <AgentSection agent={SURVEYOR} connected={isConnected} onOpenDoc={openDoc} os={os} />
-        </div>
+        {template === 'full' && (
+          <>
+            <div className={css.downArrow} style={{ opacity: 0.4 }}>↓ nightly</div>
+            <div className={css.surveyorWrap}>
+              <div className={css.surveyorBadge}>SCHEDULED</div>
+              <AgentSection agent={SURVEYOR} connected={isConnected} onOpenDoc={openDoc} os={os} />
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
