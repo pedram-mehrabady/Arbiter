@@ -173,6 +173,70 @@ export default defineConfig({
             return sendJson(res, result.ok ? 200 : 500, result);
           }
 
+          // ── AI assistant chat ─────────────────────────────────────
+          if (req.url === '/api/run-assistant') {
+            let payload: { provider: string; model: string; messages: Array<{ role: string; content: string }>; apiKey?: string };
+            try { payload = JSON.parse(await readBody(req)); }
+            catch { return sendJson(res, 400, { ok: false, error: 'bad json' }); }
+
+            const { provider, model, messages, apiKey } = payload;
+            const lastUser = [...messages].reverse().find((m) => m.role === 'user')?.content ?? '';
+
+            if (provider === 'claude_max_cli') {
+              // Build a minimal context: system + history + latest user turn
+              const systemLines = [
+                'You are a helpful assistant embedded in Arbiter Pipeline, an AI-driven development pipeline tool.',
+                'Be concise and practical.',
+              ];
+              const historyText = messages.slice(0, -1)
+                .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+                .join('\n');
+              const prompt = historyText
+                ? `${systemLines.join(' ')}\n\nConversation so far:\n${historyText}\n\nUser: ${lastUser}`
+                : `${systemLines.join(' ')}\n\nUser: ${lastUser}`;
+
+              const reply = await new Promise<string>((resolve) => {
+                const proc = spawn('claude', ['--model', model, '-p', prompt], { env: process.env });
+                let out = ''; let err = '';
+                proc.stdout.on('data', (d: Buffer) => { out += d.toString(); });
+                proc.stderr.on('data', (d: Buffer) => { err += d.toString(); });
+                proc.on('close', (code: number) => {
+                  if (code === 0 && out.trim()) resolve(out.trim());
+                  else resolve(`Error (exit ${code}): ${err.trim() || 'no output'}`);
+                });
+                setTimeout(() => { proc.kill(); resolve('Request timed out after 90 seconds.'); }, 90_000);
+              });
+              return sendJson(res, 200, { ok: true, reply });
+            }
+
+            if (provider === 'anthropic_api') {
+              if (!apiKey) return sendJson(res, 400, { ok: false, error: 'API key required' });
+              try {
+                const r = await fetch('https://api.anthropic.com/v1/messages', {
+                  method: 'POST',
+                  headers: {
+                    'x-api-key': apiKey,
+                    'anthropic-version': '2023-06-01',
+                    'content-type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    model,
+                    max_tokens: 1024,
+                    system: 'You are a helpful assistant embedded in Arbiter Pipeline, an AI-driven development pipeline tool. Be concise and practical.',
+                    messages: messages.map((m) => ({ role: m.role, content: m.content })),
+                  }),
+                });
+                const json = await r.json() as { content?: Array<{ text: string }> };
+                const reply = json.content?.[0]?.text ?? 'No response';
+                return sendJson(res, 200, { ok: true, reply });
+              } catch (e) {
+                return sendJson(res, 500, { ok: false, error: String(e) });
+              }
+            }
+
+            return sendJson(res, 400, { ok: false, error: `Unknown provider: ${provider}` });
+          }
+
           // ── File write ─────────────────────────────────────────────
           if (req.url === '/api/repo-write') {
             let payload: { path: string; content: string; root?: string };

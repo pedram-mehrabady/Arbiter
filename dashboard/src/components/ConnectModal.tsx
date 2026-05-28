@@ -245,6 +245,51 @@ export function ConnectModal() {
             />
           </label>
 
+          <div className={css.divider} />
+
+          {/* AI Assistant */}
+          <div className={css.sectionLabel}>AI assistant</div>
+          <div className={css.sectionHint}>
+            The chat assistant accessible via the <strong>💬</strong> button. Independent from pipeline agents.
+          </div>
+          <div className={css.field}>
+            <span className={css.fieldLabel}>Provider</span>
+            <div className={css.osToggle}>
+              {([
+                { value: 'claude_max_cli', label: '⌨ CLI (Max)' },
+                { value: 'anthropic_api',  label: '🔑 API key'  },
+              ] as const).map(({ value, label }) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={`${css.osBtn}${settings.assistantProvider === value ? ' ' + css.osBtnActive : ''}`}
+                  onClick={() => updateSettings({ assistantProvider: value })}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className={css.field}>
+            <span className={css.fieldLabel}>Model</span>
+            <div className={css.osToggle} style={{ flexWrap: 'wrap' }}>
+              {[
+                { value: 'claude-opus-4-7',          label: 'Opus 4.7'   },
+                { value: 'claude-sonnet-4-6',         label: 'Sonnet 4.6' },
+                { value: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5'  },
+              ].map(({ value, label }) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={`${css.osBtn}${settings.assistantModel === value ? ' ' + css.osBtnActive : ''}`}
+                  onClick={() => updateSettings({ assistantModel: value })}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Factory config — only when connected and loaded */}
           {isConnected && fullConfig && (
             <>

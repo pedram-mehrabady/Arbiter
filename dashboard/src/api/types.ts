@@ -228,12 +228,16 @@ export interface AppSettings {
   repoPath: string;
   os: OsType;
   anthropicApiKey: string;
+  assistantProvider: 'claude_max_cli' | 'anthropic_api' | '';
+  assistantModel: string;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
   repoPath: '',
   os: 'mac',
   anthropicApiKey: '',
+  assistantProvider: '',
+  assistantModel: 'claude-opus-4-7',
 };
 
 export interface PlanAnalysis {

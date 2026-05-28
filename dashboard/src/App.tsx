@@ -15,6 +15,7 @@ import { ActionGateModal } from './features/arbiter/components/ActionGateModal';
 import { ConductorGate } from './features/arbiter/components/ConductorGate';
 import { DeveloperSetupModal } from './features/developer/DeveloperSetupModal';
 import { ConductorBanner } from './components/ConductorBanner';
+import { AssistantChat } from './components/AssistantChat';
 import { useDeveloperActivity } from './hooks/useDeveloperActivity';
 import { getDeveloperName } from './lib/developer';
 import styles from './App.module.css';
@@ -120,6 +121,7 @@ export default function App() {
 
       <WatcherModal />
       <ConnectModal />
+      <AssistantChat />
       <Toast />
 
       {(needsSetup || profileOpen) && (
