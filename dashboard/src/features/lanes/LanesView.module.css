@@ -96,6 +96,8 @@
 .createBtn { flex: 1; background: var(--accent); color: #fff; border: none; border-radius: 6px; padding: 5px; font-size: 12px; font-weight: 600; cursor: pointer; }
 .cancelBtn { background: var(--bg, #f3f4f6); color: var(--muted); border: none; border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer; }
 .cardId { font-size: 12px; font-weight: 700; color: var(--text); }
+.cardBadges { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+.ciBadge { font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 999px; background: #ede9fe; color: #5b21b6; white-space: nowrap; }
 .badge { font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 999px; text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; }
 .lc_queued { background: #e5e7eb; color: #4b5563; }
 .lc_running { background: #dbeafe; color: #1d4ed8; }

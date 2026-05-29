@@ -65,6 +65,8 @@ export interface LaneCard {
   laneIndex: number;
   /** when lifecycle is needs-gate, the engine gate id to resolve on a forward drop. */
   gateId?: string;
+  /** push/PR/CI status label (engine projection only): 'PR open' | 'CI ✓' | 'CI ✗' | 'debugging' | 're-pushed' | 'merged'. */
+  pushCi?: string;
 }
 
 export interface TaskSnapshot {

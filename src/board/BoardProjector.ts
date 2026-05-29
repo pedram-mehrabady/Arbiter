@@ -15,7 +15,7 @@ export const DEFAULT_FLOW: FlowLane[] = [
 ];
 
 export type CardLifecycle = 'queued' | 'running' | 'needs-gate' | 'done';
-export interface LaneCard { taskId: string; title: string; laneId: string; laneIndex: number; columnId: string; lifecycle: CardLifecycle; gateId?: string }
+export interface LaneCard { taskId: string; title: string; laneId: string; laneIndex: number; columnId: string; lifecycle: CardLifecycle; gateId?: string; pushCi?: string }
 export interface TaskSnapshot { taskId: string; title: string; agentStatus: Record<string, string>; pendingGate?: { type: string; subTask?: string; gateId?: string } }
 export interface BoardJson { generated: string; lanes: FlowLane[]; cards: LaneCard[] }
 
@@ -50,6 +50,42 @@ export function deriveCards(flow: FlowLane[], tasks: TaskSnapshot[]): LaneCard[]
     for (const lane of flow) if (lane.agents.some(a => t.agentStatus[a.id] === 'completed')) doneLane = lane;
     return { ...base, laneId: doneLane.id, laneIndex: laneIndex(doneLane.id), columnId: 'done', lifecycle: 'done' };
   });
+}
+
+/** Latest push/PR/CI status label for a task, from its event stream. */
+function ciLabel(events: Array<{ event_type: string; payload: string }>): string | undefined {
+  let label: string | undefined;
+  for (const e of events) {
+    switch (e.event_type) {
+      case 'pr_opened': label = 'PR open'; break;
+      case 'pr_open_failed': label = 'push failed'; break;
+      case 'ci_result': {
+        try { label = (JSON.parse(e.payload) as { conclusion?: string }).conclusion === 'success' ? 'CI ✓' : 'CI ✗'; } catch { label = 'CI'; }
+        break;
+      }
+      case 'ci_failure': label = 'CI ✗'; break;
+      case 'ci_debugger_attempt': label = 'debugging'; break;
+      case 'ci_debugger_result': {
+        try { label = (JSON.parse(e.payload) as { pushed?: boolean }).pushed ? 're-pushed' : 'CI ✗'; } catch { /* keep */ }
+        break;
+      }
+      case 'task_completed_via_ci':
+      case 'task_completed_via_lgtm': label = 'merged'; break;
+    }
+  }
+  return label;
+}
+
+/** Read push/CI events from SQLite (best-effort, read-only) and tag each card. */
+async function annotatePushCi(workspaceRoot: string, cards: LaneCard[]): Promise<void> {
+  try {
+    const { SqliteStore } = await import('../state/SqliteStore');
+    const store = new SqliteStore(workspaceRoot);
+    for (const card of cards) {
+      const label = ciLabel(store.getEvents(card.taskId));
+      if (label) card.pushCi = label;
+    }
+  } catch { /* no db / locked — skip annotations */ }
 }
 
 async function loadFlow(workspaceRoot: string): Promise<FlowLane[]> {
@@ -92,7 +128,10 @@ export async function projectBoard(workspaceRoot: string): Promise<BoardJson> {
     } catch { /* skip unreadable task */ }
   }
 
-  const board: BoardJson = { generated: new Date().toISOString(), lanes: flow, cards: deriveCards(flow, snapshots) };
+  const cards = deriveCards(flow, snapshots);
+  await annotatePushCi(workspaceRoot, cards); // D1: tag cards with push/PR/CI status
+
+  const board: BoardJson = { generated: new Date().toISOString(), lanes: flow, cards };
   await fs.mkdir(arbiterDir, { recursive: true });
   // Written to lanes.json (NOT board.json — that name belongs to the legacy board format).
   await fs.writeFile(path.join(arbiterDir, 'lanes.json'), JSON.stringify(board, null, 2), 'utf-8');

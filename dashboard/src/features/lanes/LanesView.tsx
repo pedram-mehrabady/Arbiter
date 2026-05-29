@@ -146,8 +146,11 @@ export function LanesView() {
                             }}
                           >
                             <span className={css.cardId}>{card.taskId}</span>
-                            <span className={`${css.badge} ${css['lc_' + card.lifecycle.replace('-', '_')]}`}>
-                              {LIFECYCLE_LABEL[card.lifecycle]}
+                            <span className={css.cardBadges}>
+                              {card.pushCi && <span className={css.ciBadge}>{card.pushCi}</span>}
+                              <span className={`${css.badge} ${css['lc_' + card.lifecycle.replace('-', '_')]}`}>
+                                {LIFECYCLE_LABEL[card.lifecycle]}
+                              </span>
                             </span>
                           </div>
                         ))}
