@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { useShallow } from 'zustand/react/shallow';
 import { DEFAULT_FLOW, type CardLifecycle, type LaneCard } from './flow';
+import { TaskDetailModal } from './TaskDetailModal';
 import css from './LanesView.module.css';
 
 const LIFECYCLE_LABEL: Record<CardLifecycle, string> = {
@@ -17,6 +18,7 @@ export function LanesView() {
     isConnected: s.isConnected,
   })));
 
+  const [openTask, setOpenTask] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const toggle = (id: string) =>
     setCollapsed((prev) => {
@@ -63,7 +65,7 @@ export function LanesView() {
                       </div>
                       <div className={css.cards}>
                         {cards.map((card) => (
-                          <div key={card.taskId} className={css.card}>
+                          <div key={card.taskId} className={css.card} onClick={() => setOpenTask(card.taskId)} role="button">
                             <span className={css.cardId}>{card.taskId}</span>
                             <span className={`${css.badge} ${css['lc_' + card.lifecycle.replace('-', '_')]}`}>
                               {LIFECYCLE_LABEL[card.lifecycle]}
@@ -80,6 +82,8 @@ export function LanesView() {
           </section>
         );
       })}
+
+      {openTask && <TaskDetailModal taskId={openTask} onClose={() => setOpenTask(null)} />}
     </div>
   );
 }
