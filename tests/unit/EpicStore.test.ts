@@ -46,6 +46,38 @@ describe('EpicStore', () => {
     expect(fs.existsSync(path.join(root, 'arbiter', 'tasks', firstTask, 'task.md'))).toBe(true);
   });
 
+  it('smart decompose: uses the LLM tree (multiple tasks/story, estimates, resolved deps)', async () => {
+    const root = workspace();
+    const id = await createEpic(root, 'Portal', DOC);
+    const tree = JSON.stringify({
+      stories: [{
+        title: 'Accounts', traces: ['Auth'],
+        tasks: [
+          { title: 'Login form', brief: 'build login', estimate: 2 },
+          { title: 'Signup form', brief: 'build signup', estimate: 3, dependsOn: ['Login form'] },
+        ],
+      }],
+    });
+    const epic = await decompose(root, id, { invoke: async () => '```json\n' + tree + '\n```' });
+
+    expect(epic.stories).toHaveLength(1);
+    expect(epic.stories[0].title).toBe('Accounts');
+    expect(epic.stories[0].taskIds).toHaveLength(2);
+    // dependsOn 'Login form' resolves to the first task's id.
+    const t2 = epic.stories[0].taskIds[1];
+    const meta = JSON.parse(fs.readFileSync(path.join(root, 'arbiter', 'tasks', t2, 'meta.json'), 'utf-8'));
+    expect(meta.estimate).toBe(3);
+    expect(meta.dependsOn).toEqual([epic.stories[0].taskIds[0]]);
+  });
+
+  it('falls back to heading-based when the LLM returns junk', async () => {
+    const root = workspace();
+    const id = await createEpic(root, 'Portal', DOC);
+    const epic = await decompose(root, id, { invoke: async () => 'sorry, I cannot do that' });
+    // Heading fallback → at least the Auth + Contacts sections.
+    expect(epic.stories.map(s => s.title)).toEqual(expect.arrayContaining(['Auth', 'Contacts']));
+  });
+
   it('rolls up completion: 0% fresh, counts done pipeline tasks', async () => {
     const root = workspace();
     const id = await createEpic(root, 'Portal', DOC);

@@ -83,6 +83,16 @@ export class FactoryDaemon {
     }
   }
 
+  /** Wrap the daemon's provider as an LLM hook for smart decomposition (undefined → heading-based). */
+  private decomposeInvoke(): ((prompt: string) => Promise<string>) | undefined {
+    const provider = this.opts.provider as { invoke?: (req: { model: string; assembledPrompt: string; maxTokens: number; timeoutMs: number; agentRole: string }) => Promise<{ ok: boolean; value?: { content: string } }> } | undefined;
+    if (!provider?.invoke) return undefined;
+    return async (prompt: string) => {
+      const r = await provider.invoke!({ model: 'claude-opus-4-7', assembledPrompt: prompt, maxTokens: 8192, timeoutMs: 180_000, agentRole: 'decomposer' });
+      return r.ok && r.value ? r.value.content : '';
+    };
+  }
+
   /** Decompose any Epic flagged by the dashboard (arbiter/epics/<id>/decompose.flag). */
   private async runDecompositions(root: string): Promise<void> {
     let epicIds: string[] = [];
@@ -95,7 +105,7 @@ export class FactoryDaemon {
       if (!(await fileExists(flag))) continue;
       try {
         const { decompose } = await import('../epics/EpicStore');
-        const epic = await decompose(root, id);
+        const epic = await decompose(root, id, { invoke: this.decomposeInvoke() });
         await fs.rm(flag, { force: true });
         this.log(`decomposed ${id} → ${epic.stories.length} stories`);
       } catch (e) { this.log(`decompose ${id} failed: ${String(e)}`); }

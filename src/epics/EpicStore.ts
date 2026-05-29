@@ -8,7 +8,13 @@ import path from 'node:path';
 
 export interface Story { id: string; title: string; traces: string[]; taskIds: string[] }
 export interface Epic { id: string; title: string; createdAt: string; stories: Story[] }
-export interface TaskMeta { epicId?: string; storyId?: string; traces?: string[] }
+export interface TaskMeta { epicId?: string; storyId?: string; traces?: string[]; estimate?: number; dependsOn?: string[] }
+
+/** Optional LLM hook for smart decomposition. Returns the model's raw text. */
+export interface DecomposeOpts { invoke?: (prompt: string) => Promise<string> }
+
+interface PlanTask { title: string; brief?: string; estimate?: number; dependsOn?: string[] }
+interface PlanStory { title: string; traces?: string[]; tasks: PlanTask[] }
 
 export interface StoryRollup { id: string; title: string; total: number; done: number; pct: number }
 export interface EpicRollup { id: string; title: string; total: number; done: number; pct: number; stories: StoryRollup[] }
@@ -58,30 +64,76 @@ export async function readEpic(root: string, epicId: string): Promise<Epic | nul
  * shows on the board and can be promoted into the pipeline. Smart LLM decomposition is
  * a later refinement.
  */
-export async function decompose(root: string, epicId: string): Promise<Epic> {
+export async function decompose(root: string, epicId: string, opts: DecomposeOpts = {}): Promise<Epic> {
   const dir = path.join(epicsDir(root), epicId);
   const existing = await readEpic(root, epicId);
   if (!existing) throw new Error(`Epic ${epicId} not found`);
   const doc = await fs.readFile(path.join(dir, 'epic.md'), 'utf-8');
 
-  const sections = splitByHeadings(doc);
+  // Prefer a smart LLM plan; fall back to deterministic heading-based decomposition.
+  const plan = (opts.invoke ? await smartPlan(doc, opts.invoke) : null) ?? headingPlan(doc);
+
+  // First pass: assign ids so dependsOn (by task title) can resolve to taskIds.
+  const titleToId = new Map<string, string>();
+  plan.forEach((story, si) => story.tasks.forEach((t, ti) => titleToId.set(t.title, `${epicId}-S${si + 1}-T${ti + 1}`)));
+
   const stories: Story[] = [];
-  let si = 0;
-  for (const sec of sections) {
-    si += 1;
-    const storyId = `${epicId}-S${si}`;
-    const taskId = `${epicId}-S${si}-T1`;
-    const taskDir = path.join(root, 'arbiter', 'tasks', taskId);
-    await fs.mkdir(taskDir, { recursive: true });
-    await fs.writeFile(path.join(taskDir, 'task.md'), `# ${sec.title}\n\n${sec.body}\n`, 'utf-8');
-    await fs.writeFile(path.join(taskDir, 'meta.json'), JSON.stringify({ epicId, storyId, traces: [sec.title] } satisfies TaskMeta, null, 2), 'utf-8');
-    await fs.writeFile(path.join(taskDir, 'state.json'), JSON.stringify({ task_id: taskId, phase: 'brainstorm', sub_tasks: { ideation: { agent_role: 'ideation', status: 'in_progress' } } }, null, 2), 'utf-8');
-    stories.push({ id: storyId, title: sec.title, traces: [sec.title], taskIds: [taskId] });
+  for (let si = 0; si < plan.length; si++) {
+    const story = plan[si];
+    const storyId = `${epicId}-S${si + 1}`;
+    const taskIds: string[] = [];
+    for (let ti = 0; ti < story.tasks.length; ti++) {
+      const t = story.tasks[ti];
+      const taskId = `${epicId}-S${si + 1}-T${ti + 1}`;
+      const dependsOn = (t.dependsOn ?? []).map(d => titleToId.get(d)).filter((x): x is string => !!x);
+      const meta: TaskMeta = { epicId, storyId, traces: story.traces ?? [story.title], estimate: t.estimate, dependsOn: dependsOn.length ? dependsOn : undefined };
+      const taskDir = path.join(root, 'arbiter', 'tasks', taskId);
+      await fs.mkdir(taskDir, { recursive: true });
+      await fs.writeFile(path.join(taskDir, 'task.md'), `# ${t.title}\n\n${(t.brief ?? '').trim()}\n`, 'utf-8');
+      await fs.writeFile(path.join(taskDir, 'meta.json'), JSON.stringify(meta, null, 2), 'utf-8');
+      await fs.writeFile(path.join(taskDir, 'state.json'), JSON.stringify({ task_id: taskId, phase: 'brainstorm', sub_tasks: { ideation: { agent_role: 'ideation', status: 'in_progress' } } }, null, 2), 'utf-8');
+      taskIds.push(taskId);
+    }
+    stories.push({ id: storyId, title: story.title, traces: story.traces ?? [story.title], taskIds });
   }
 
   const epic: Epic = { ...existing, stories };
   await fs.writeFile(path.join(dir, 'epic.json'), JSON.stringify(epic, null, 2), 'utf-8');
   return epic;
+}
+
+/** Heading-based plan: each section → a Story with one Task. */
+function headingPlan(doc: string): PlanStory[] {
+  return splitByHeadings(doc).map(sec => ({ title: sec.title, traces: [sec.title], tasks: [{ title: sec.title, brief: sec.body }] }));
+}
+
+/** LLM-based plan: ask the model for a Stories→Tasks tree (strict JSON). Returns null on any failure. */
+async function smartPlan(doc: string, invoke: (prompt: string) => Promise<string>): Promise<PlanStory[] | null> {
+  const prompt = [
+    'You are decomposing a product brief into a build plan.',
+    'Output STRICT JSON only — no prose, no markdown fences. Shape:',
+    '{"stories":[{"title":string,"traces":[string],"tasks":[{"title":string,"brief":string,"estimate":number,"dependsOn":[string]}]}]}',
+    'Rules: break the brief into coherent modules (stories); each story has small, independently-shippable tasks;',
+    'traces = the parts of the brief the story covers; estimate = rough size 1-5; dependsOn = task titles this task needs first.',
+    'Keep task titles unique across the whole plan.',
+    '',
+    'Brief:',
+    doc.slice(0, 24000),
+  ].join('\n');
+  try {
+    const raw = await invoke(prompt);
+    const json = raw.replace(/```json\s*|\s*```/g, '').trim();
+    const start = json.indexOf('{'); const end = json.lastIndexOf('}');
+    if (start === -1 || end === -1) return null;
+    const parsed = JSON.parse(json.slice(start, end + 1)) as { stories?: PlanStory[] };
+    if (!Array.isArray(parsed.stories) || !parsed.stories.length) return null;
+    // Sanitize: every story needs a title + at least one task with a title.
+    const clean = parsed.stories
+      .filter(s => s.title && Array.isArray(s.tasks))
+      .map(s => ({ title: String(s.title), traces: s.traces, tasks: s.tasks.filter(t => t.title).map(t => ({ title: String(t.title), brief: t.brief, estimate: t.estimate, dependsOn: t.dependsOn })) }))
+      .filter(s => s.tasks.length);
+    return clean.length ? clean : null;
+  } catch { return null; }
 }
 
 /** Is a task fully complete? (state.json with all sub_tasks completed, and not brainstorm-only.) */
