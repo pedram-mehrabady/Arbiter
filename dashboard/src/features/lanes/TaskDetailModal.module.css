@@ -1,7 +1,9 @@
 .overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,.45);
-  display: flex; align-items: center; justify-content: center; z-index: 100;
+  display: flex; align-items: center; justify-content: center; z-index: 1000;
 }
+.subtitle { font-size: 11px; color: var(--muted); margin-left: 2px; }
+.chatHead { padding: 8px 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); border-bottom: 1px solid var(--border, #eef0f3); }
 .modal {
   width: min(1100px, 94vw); height: min(720px, 90vh);
   background: var(--panel, #fff); border-radius: 12px; overflow: hidden;

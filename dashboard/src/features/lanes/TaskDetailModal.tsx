@@ -1,18 +1,18 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAppStore } from '../../store/useAppStore';
+import { useShallow } from 'zustand/react/shallow';
 import { DEFAULT_FLOW } from './flow';
 import css from './TaskDetailModal.module.css';
 
-interface Props { taskId: string; onClose: () => void; }
-interface ChatMsg { role: 'user' | 'assistant'; content: string; }
+interface Props { taskId: string; subtitle?: string; onClose: () => void; }
+interface ChatMsg { role: 'user' | 'assistant'; content: string; ts?: string }
+type UsageRow = { agent_role?: string; model?: string; input_tokens?: number; output_tokens?: number; context_tokens?: number; cost_usd?: number; ts?: string };
 
-// Step artifacts we try to load for a task (agent → output file), in flow order.
+// Artifacts we try to load (agent → output file), in flow order. task.md is the PRD.
 const ARTIFACTS: Array<{ label: string; file: string }> = [
-  { label: 'PRD / Task', file: 'task.md' },
+  { label: 'PRD', file: 'task.md' },
   ...DEFAULT_FLOW.flatMap((l) => l.agents.map((a) => ({ label: a.label, file: `${a.id}-output.md` }))),
 ];
-
-type UsageRow = { agent_role?: string; model?: string; input_tokens?: number; output_tokens?: number; context_tokens?: number; cost_usd?: number; ts?: string };
 
 function fmtNum(n: number): string { return n.toLocaleString(); }
 function fmtDuration(ms: number): string {
@@ -22,13 +22,14 @@ function fmtDuration(ms: number): string {
   const m = Math.floor(s / 60); return `${m}m ${s % 60}s`;
 }
 
-function renderLog(usage: UsageRow[]) {
+function LogView({ usage }: { usage: UsageRow[] }) {
   const sum = (f: (r: UsageRow) => number) => usage.reduce((a, r) => a + f(r), 0);
   const totalTokens = sum(r => (r.input_tokens ?? 0) + (r.output_tokens ?? 0));
   const totalCtx = sum(r => r.context_tokens ?? 0);
   const totalCost = sum(r => r.cost_usd ?? 0);
   const times = usage.map(r => (r.ts ? Date.parse(r.ts) : NaN)).filter(n => !Number.isNaN(n));
   const duration = times.length >= 2 ? Math.max(...times) - Math.min(...times) : 0;
+  if (usage.length === 0) return <div className={css.dim}>No run history yet — this task hasn’t executed any steps.</div>;
   return (
     <div className={css.log}>
       <div className={css.logTotals}>
@@ -56,33 +57,48 @@ function renderLog(usage: UsageRow[]) {
   );
 }
 
-export function TaskDetailModal({ taskId, onClose }: Props) {
-  const { liveApi, settings } = useAppStore((s) => ({ liveApi: s.liveApi, settings: s.settings }));
+export function TaskDetailModal({ taskId, subtitle, onClose }: Props) {
+  const { liveApi, settings } = useAppStore(useShallow((s) => ({ liveApi: s.liveApi, settings: s.settings })));
+  const api = liveApi as unknown as {
+    readRepoFile?: (p: string) => Promise<string | null>;
+    writeRepoFile?: (p: string, c: string) => Promise<void>;
+    readUsageForTask?: (id: string) => Promise<UsageRow[]>;
+  } | null;
+
   const [docs, setDocs] = useState<Array<{ label: string; content: string }>>([]);
-  const [activeDoc, setActiveDoc] = useState(0);
-  const [showLog, setShowLog] = useState(false);
-  const [usage, setUsage] = useState<Array<{ agent_role?: string; model?: string; input_tokens?: number; output_tokens?: number; context_tokens?: number; cost_usd?: number; ts?: string }>>([]);
+  const [tab, setTab] = useState<string>('PRD');       // doc label, or 'LOG'
+  const [usage, setUsage] = useState<UsageRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  // ── Load everything: artifacts, usage log, persisted chat history ──────────
   useEffect(() => {
     let alive = true;
     (async () => {
       setLoading(true);
-      const api = liveApi as unknown as { readRepoFile?: (p: string) => Promise<string | null>; readUsageForTask?: (id: string) => Promise<typeof usage> } | null;
       const found: Array<{ label: string; content: string }> = [];
       for (const a of ARTIFACTS) {
         const content = api?.readRepoFile ? await api.readRepoFile(`arbiter/tasks/${taskId}/${a.file}`) : null;
         if (content) found.push({ label: a.label, content });
       }
       const u = api?.readUsageForTask ? await api.readUsageForTask(taskId) : [];
-      if (alive) { setDocs(found); setUsage(u); setLoading(false); }
+      const chatRaw = api?.readRepoFile ? await api.readRepoFile(`arbiter/tasks/${taskId}/chat.jsonl`) : null;
+      const chat: ChatMsg[] = chatRaw
+        ? chatRaw.split('\n').filter(Boolean).map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean) as ChatMsg[]
+        : [];
+      if (alive) {
+        setDocs(found);
+        setUsage(u);
+        setMessages(chat);
+        setTab(found[0]?.label ?? 'PRD');
+        setLoading(false);
+      }
     })();
     return () => { alive = false; };
-  }, [taskId, liveApi]);
+  }, [taskId, liveApi]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, busy]);
   useEffect(() => {
@@ -91,38 +107,55 @@ export function TaskDetailModal({ taskId, onClose }: Props) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  const activeDoc = docs.find(d => d.label === tab);
+
+  const persistChat = useCallback(async (msgs: ChatMsg[]) => {
+    if (!api?.writeRepoFile) return;
+    try { await api.writeRepoFile(`arbiter/tasks/${taskId}/chat.jsonl`, msgs.map(m => JSON.stringify(m)).join('\n') + '\n'); } catch { /* best-effort */ }
+  }, [api, taskId]);
+
   const send = useCallback(async () => {
     const text = draft.trim();
     if (!text || busy) return;
     const provider = settings.assistantProvider;
-    if (!provider) { setMessages((m) => [...m, { role: 'assistant', content: 'Set an assistant provider + API key in Settings to chat.' }]); return; }
-    const doc = docs[activeDoc];
+    const userMsg: ChatMsg = { role: 'user', content: text, ts: new Date().toISOString() };
+    const next = [...messages, userMsg];
+    setMessages(next); setDraft(''); setBusy(true);
+    void persistChat(next);
+
+    if (!provider) {
+      const m = [...next, { role: 'assistant' as const, content: 'Set an assistant provider + API key in Settings to chat here.' }];
+      setMessages(m); setBusy(false); void persistChat(m); return;
+    }
+    const ctx = tab === 'LOG' ? '(run log)' : (activeDoc?.content ?? '');
     const system = [
-      `You are discussing task ${taskId} in an AI dev pipeline, specifically its "${doc?.label ?? 'task'}".`,
-      `Help refine or adjust it. Here is the current content:`,
-      '',
-      (doc?.content ?? '').slice(0, 6000),
+      `You are working on task ${taskId} in an AI dev pipeline, currently its "${tab}".`,
+      `Help the user refine or adjust it. Be concise and concrete.`,
+      `Current content:\n\n${ctx.slice(0, 6000)}`,
     ].join('\n');
-    setMessages((m) => [...m, { role: 'user', content: text }]);
-    setDraft(''); setBusy(true);
     try {
       const res = await fetch('/api/run-assistant', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ provider, model: settings.assistantModel || 'claude-opus-4-7', apiKey: settings.anthropicApiKey || undefined,
-          messages: [{ role: 'user', content: system }, { role: 'user', content: text }] }),
+          messages: [{ role: 'user', content: system }, ...next.map(m => ({ role: m.role, content: m.content }))] }),
       });
       const data = await res.json() as { ok: boolean; reply?: string; error?: string };
-      setMessages((m) => [...m, { role: 'assistant', content: data.ok ? (data.reply ?? '') : `Error: ${data.error}` }]);
+      const m = [...next, { role: 'assistant' as const, content: data.ok ? (data.reply ?? '') : `Error: ${data.error}`, ts: new Date().toISOString() }];
+      setMessages(m); void persistChat(m);
     } catch (e) {
-      setMessages((m) => [...m, { role: 'assistant', content: `Chat unavailable: ${(e as Error).message}` }]);
+      const m = [...next, { role: 'assistant' as const, content: `Chat unavailable: ${(e as Error).message}` }];
+      setMessages(m); void persistChat(m);
     } finally { setBusy(false); }
-  }, [draft, busy, settings, docs, activeDoc, taskId]);
+  }, [draft, busy, settings, messages, tab, activeDoc, taskId, persistChat]);
 
   return (
     <div className={css.overlay} onClick={onClose}>
       <div className={css.modal} onClick={(e) => e.stopPropagation()}>
         <header className={css.head}>
-          <h3>{taskId}</h3>
+          <div>
+            <h3>{taskId}</h3>
+            {subtitle && <span className={css.subtitle}>{subtitle}</span>}
+          </div>
           <button className={css.close} onClick={onClose}>✕</button>
         </header>
         <div className={css.body}>
@@ -130,22 +163,23 @@ export function TaskDetailModal({ taskId, onClose }: Props) {
             {loading ? <div className={css.dim}>Loading…</div> : (
               <>
                 <div className={css.tabs}>
-                  {docs.map((d, i) => (
-                    <button key={d.label} className={`${css.docTab} ${!showLog && i === activeDoc ? css.docTabActive : ''}`} onClick={() => { setShowLog(false); setActiveDoc(i); }}>{d.label}</button>
+                  {docs.map((d) => (
+                    <button key={d.label} className={`${css.docTab} ${tab === d.label ? css.docTabActive : ''}`} onClick={() => setTab(d.label)}>{d.label}</button>
                   ))}
-                  {usage.length > 0 && (
-                    <button className={`${css.docTab} ${showLog ? css.docTabActive : ''}`} onClick={() => setShowLog(true)}>📊 Log</button>
-                  )}
+                  <button className={`${css.docTab} ${tab === 'LOG' ? css.docTabActive : ''}`} onClick={() => setTab('LOG')}>📊 Log</button>
                 </div>
-                {showLog ? renderLog(usage) : docs.length === 0
-                  ? <div className={css.dim}>No artifacts yet for this task.</div>
-                  : <pre className={css.docContent}>{docs[activeDoc]?.content}</pre>}
+                {tab === 'LOG'
+                  ? <LogView usage={usage} />
+                  : docs.length === 0
+                    ? <div className={css.dim}>No artifacts yet — this task hasn’t produced any step outputs.</div>
+                    : <pre className={css.docContent}>{activeDoc?.content}</pre>}
               </>
             )}
           </div>
           <div className={css.chatPane}>
+            <div className={css.chatHead}>Chat — {tab === 'LOG' ? 'this task' : tab}</div>
             <div className={css.chatLog}>
-              {messages.length === 0 && <div className={css.dim}>Ask the AI to refine or adjust this step…</div>}
+              {messages.length === 0 && <div className={css.dim}>Discuss or refine this step with the AI. History is saved with the task.</div>}
               {messages.map((m, i) => (
                 <div key={i} className={m.role === 'user' ? css.userMsg : css.aiMsg}>{m.content}</div>
               ))}
@@ -155,7 +189,7 @@ export function TaskDetailModal({ taskId, onClose }: Props) {
             <div className={css.chatInput}>
               <textarea value={draft} onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }}
-                placeholder="Discuss this step…" rows={2} />
+                placeholder="Message the AI about this step…" rows={2} />
               <button onClick={() => void send()} disabled={busy}>Send</button>
             </div>
           </div>

@@ -144,7 +144,12 @@ export function LanesView() {
         );
       })}
 
-      {openTask && <TaskDetailModal taskId={openTask} onClose={() => setOpenTask(null)} />}
+      {openTask && (() => {
+        const c = laneCards.find((x) => x.taskId === openTask);
+        const laneTitle = DEFAULT_FLOW.find((l) => l.id === c?.laneId)?.title;
+        const subtitle = c ? `${laneTitle ?? c.laneId} · ${c.lifecycle}` : undefined;
+        return <TaskDetailModal taskId={openTask} subtitle={subtitle} onClose={() => setOpenTask(null)} />;
+      })()}
     </div>
   );
 }
