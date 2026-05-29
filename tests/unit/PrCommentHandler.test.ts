@@ -43,8 +43,8 @@ describe('PrCommentHandler', () => {
     );
   });
 
-  it('code_change: dispatches coder fix (records pending_coder_fix event)', async () => {
-    const dir = tempDir();
+  it('code_change: attempts a coder fix and records the result (non-git → not pushed)', async () => {
+    const dir = tempDir(); // not a git repo → PatchRunner degrades gracefully
     const store = makeStore();
     const content = 'COMMENT_TYPE: code_change\nRESPONSE: Please fix the null check on line 42.';
     const handler = new PrCommentHandler(store, makeProvider(content), dir);
@@ -53,8 +53,13 @@ describe('PrCommentHandler', () => {
 
     expect(store.appendEvent).toHaveBeenCalledWith(
       'TASK-002',
-      'pending_coder_fix',
+      'coder_fix_dispatched',
       expect.any(Object),
+    );
+    expect(store.appendEvent).toHaveBeenCalledWith(
+      'TASK-002',
+      'coder_fix_result',
+      expect.objectContaining({ pushed: false }),
     );
   });
 

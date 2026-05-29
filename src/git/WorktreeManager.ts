@@ -39,6 +39,57 @@ export class WorktreeManager {
     }
   }
 
+  /**
+   * Re-create a worktree checked out to an EXISTING branch (no -b) — used to
+   * resume work on an already-opened PR branch (e.g. to apply a review fix).
+   */
+  async reopen(taskId: string, branchName: string): Promise<ServiceResult<string>> {
+    const worktreePath = this.getPath(taskId);
+
+    const isRepo = await this.isGitRepo();
+    if (!isRepo) {
+      return { ok: false, error: 'Not a git repository — WorktreeManager requires git' };
+    }
+
+    // Clean up a stale worktree at the same path first (best-effort).
+    await execFileAsync('git', ['-C', this.workspaceRoot, 'worktree', 'remove', '--force', worktreePath], { timeout: 30_000 })
+      .catch(() => { /* nothing to remove */ });
+
+    try {
+      await execFileAsync(
+        'git',
+        ['-C', this.workspaceRoot, 'worktree', 'add', worktreePath, branchName],
+        { timeout: 30_000 },
+      );
+      return { ok: true, value: worktreePath };
+    } catch (err) {
+      return { ok: false, error: `git worktree add (reopen) failed: ${String(err)}` };
+    }
+  }
+
+  /**
+   * Stage + commit + push the task's worktree to an existing branch WITHOUT
+   * opening a PR (used to push a follow-up commit onto an open PR's branch).
+   */
+  async pushToBranch(taskId: string, branchName: string, message?: string): Promise<ServiceResult<void>> {
+    const worktreePath = this.getPath(taskId);
+    const isRepo = await this.isGitRepo();
+    if (!isRepo) return { ok: false, error: 'Not a git repository' };
+
+    try {
+      await execFileAsync('git', ['-C', worktreePath, 'add', '-A'], { timeout: 15_000 });
+      await execFileAsync(
+        'git',
+        ['-C', worktreePath, 'commit', '-m', message ?? `arbiter: ${taskId} follow-up`],
+        { timeout: 15_000 },
+      ).catch(() => { /* nothing to commit */ });
+      await execFileAsync('git', ['-C', worktreePath, 'push', 'origin', branchName], { timeout: 60_000 });
+      return { ok: true, value: undefined };
+    } catch (err) {
+      return { ok: false, error: `push to ${branchName} failed: ${String(err)}` };
+    }
+  }
+
   async delete(taskId: string): Promise<ServiceResult<void>> {
     const worktreePath = this.getPath(taskId);
     try {

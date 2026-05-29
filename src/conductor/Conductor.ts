@@ -46,6 +46,7 @@ import { OrchestratorDispatcher } from '../orchestrator/OrchestratorDispatcher';
 import { WebhookReceiver } from '../webhooks/WebhookReceiver';
 import { CiResultHandler } from '../webhooks/CiResultHandler';
 import { PrCommentHandler } from '../webhooks/PrCommentHandler';
+import { OrchestratorHttpApi } from '../api/OrchestratorHttpApi';
 
 const CONFIG_FILE = 'arbiter.config.json';
 const FALLBACK_CONFIG_FILE = 'factory-config.json';
@@ -80,6 +81,7 @@ export class Conductor {
   private gitAutoCommit: GitAutoCommit | undefined;
   readonly worktreeManager: WorktreeManager;
   private readonly telegram = new TelegramNotifier();
+  private orchestratorApi: OrchestratorHttpApi | undefined;
 
   constructor(options: ConductOptions) {
     this.options = options;
@@ -412,6 +414,21 @@ export class Conductor {
       console.log(`  ✓ Webhook receiver started on port 7475`);
     } catch (err) {
       console.warn(`  ⚠ Webhook receiver failed to start: ${String(err)}`);
+    }
+
+    // Orchestrator HTTP API (port 7474) — backs the dashboard chat (user_chat).
+    try {
+      const dispatcher = new OrchestratorDispatcher(
+        this.sqliteStore,
+        this.provider,
+        this.options.workspaceRoot,
+        this.config?.roles?.['orchestrator']?.model ?? 'claude-opus-4-7',
+      );
+      this.orchestratorApi = new OrchestratorHttpApi(dispatcher);
+      await this.orchestratorApi.start();
+      console.log(`  ✓ Orchestrator chat API started on port 7474`);
+    } catch (err) {
+      console.warn(`  ⚠ Orchestrator chat API failed to start: ${String(err)}`);
     }
   }
 
