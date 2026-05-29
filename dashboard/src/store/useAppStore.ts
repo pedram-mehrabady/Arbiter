@@ -241,12 +241,12 @@ export const useAppStore = create<AppStore>()(
         const api = liveApi as unknown as {
           listTaskIds?: () => Promise<string[]>;
           readTaskState?: (id: string) => Promise<{ sub_tasks?: Record<string, { agent_role: string; status: string }> } | null>;
-          readPendingGates?: () => Promise<Array<{ task_id: string; type: string; sub_task?: string; status: string }>>;
+          readPendingGates?: () => Promise<Array<{ gate_id: string; task_id: string; type: string; sub_task?: string; status: string }>>;
         };
         if (!api.listTaskIds || !api.readTaskState) return;
         const ids = await api.listTaskIds();
         const gates = (await api.readPendingGates?.() ?? []).filter(g => g.status === 'pending');
-        const gateByTask = new Map(gates.map(g => [g.task_id, { type: g.type, subTask: g.sub_task }]));
+        const gateByTask = new Map(gates.map(g => [g.task_id, { type: g.type, subTask: g.sub_task, gateId: g.gate_id }]));
         const rank = (s: string) => (s === 'in_progress' ? 3 : s === 'failed' ? 2 : s === 'pending' ? 1 : 0);
         const snapshots: TaskSnapshot[] = [];
         for (const id of ids) {

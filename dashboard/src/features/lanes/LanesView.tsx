@@ -13,10 +13,12 @@ const LIFECYCLE_LABEL: Record<CardLifecycle, string> = {
 };
 
 export function LanesView() {
-  const { laneCards, isConnected, createBrainstormTask } = useAppStore(useShallow((s) => ({
+  const { laneCards, isConnected, createBrainstormTask, resolveEngineGate, showToast } = useAppStore(useShallow((s) => ({
     laneCards: s.laneCards,
     isConnected: s.isConnected,
     createBrainstormTask: s.createBrainstormTask,
+    resolveEngineGate: s.resolveEngineGate,
+    showToast: s.showToast,
   })));
 
   const [openTask, setOpenTask] = useState<string | null>(null);
@@ -24,6 +26,23 @@ export function LanesView() {
   const [creating, setCreating] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newIdea, setNewIdea] = useState('');
+  const [dragged, setDragged] = useState<LaneCard | null>(null);
+  const [dragOver, setDragOver] = useState<string | null>(null);
+
+  const onDropLane = (targetLaneId: string) => {
+    const card = dragged;
+    setDragged(null); setDragOver(null);
+    if (!card) return;
+    const targetIdx = DEFAULT_FLOW.findIndex((l) => l.id === targetLaneId);
+    if (targetIdx <= card.laneIndex) { showToast('Drag a card forward to advance it'); return; }
+    if (card.gateId) {
+      void resolveEngineGate(card.gateId, 'approved'); // approving the gate advances the running pipeline
+    } else if (card.laneId === 'brainstorm') {
+      showToast('Idea ready — run it with: arbiter conduct <id> --provider mock (the board can’t spawn the engine)', 7000);
+    } else {
+      showToast('This task advances automatically — no gate to approve here', 5000);
+    }
+  };
 
   const submitIdea = async () => {
     if (!newTitle.trim()) return;
@@ -52,7 +71,13 @@ export function LanesView() {
         const laneCount = laneCards.filter((c) => c.laneId === lane.id).length;
         const columns = [...lane.agents.map((a) => ({ id: a.id, label: a.label })), { id: 'done', label: 'Done' }];
         return (
-          <section key={lane.id} className={css.lane}>
+          <section
+            key={lane.id}
+            className={`${css.lane} ${dragOver === lane.id ? css.laneDragOver : ''}`}
+            onDragOver={(e) => { if (dragged) { e.preventDefault(); setDragOver(lane.id); } }}
+            onDragLeave={() => setDragOver((d) => (d === lane.id ? null : d))}
+            onDrop={() => onDropLane(lane.id)}
+          >
             <header className={css.laneHead} onClick={() => toggle(lane.id)}>
               <span className={css.caret}>{isCollapsed ? '▸' : '▾'}</span>
               <h3 className={css.laneTitle}>{lane.title}</h3>
@@ -93,7 +118,15 @@ export function LanesView() {
                           )
                         )}
                         {cards.map((card) => (
-                          <div key={card.taskId} className={css.card} onClick={() => setOpenTask(card.taskId)} role="button">
+                          <div
+                            key={card.taskId}
+                            className={css.card}
+                            role="button"
+                            draggable
+                            onDragStart={() => setDragged(card)}
+                            onDragEnd={() => { setDragged(null); setDragOver(null); }}
+                            onClick={() => setOpenTask(card.taskId)}
+                          >
                             <span className={css.cardId}>{card.taskId}</span>
                             <span className={`${css.badge} ${css['lc_' + card.lifecycle.replace('-', '_')]}`}>
                               {LIFECYCLE_LABEL[card.lifecycle]}

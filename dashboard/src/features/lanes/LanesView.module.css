@@ -21,6 +21,8 @@
   overflow: hidden;
 }
 
+.laneDragOver { outline: 2px dashed var(--accent); outline-offset: -2px; }
+
 .laneHead {
   display: flex;
   align-items: center;

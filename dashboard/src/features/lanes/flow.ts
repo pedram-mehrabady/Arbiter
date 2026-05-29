@@ -61,6 +61,10 @@ export interface LaneCard {
   /** agent column id the card currently sits in, or 'done' for the lane's Done column. */
   columnId: string;
   lifecycle: CardLifecycle;
+  /** index of the lane in the flow (for "drag forward" comparisons). */
+  laneIndex: number;
+  /** when lifecycle is needs-gate, the engine gate id to resolve on a forward drop. */
+  gateId?: string;
 }
 
 export interface TaskSnapshot {
@@ -69,7 +73,7 @@ export interface TaskSnapshot {
   /** agent_role → status, collapsed across sub-tasks. */
   agentStatus: Record<string, string>;
   /** the task's pending engine gate, if any (sub_task = the agent the gate fires after). */
-  pendingGate?: { type: string; subTask?: string };
+  pendingGate?: { type: string; subTask?: string; gateId?: string };
 }
 
 // Which lane a pending gate type belongs to.
@@ -92,20 +96,23 @@ export function deriveCards(flow: FlowLane[], tasks: TaskSnapshot[]): LaneCard[]
     for (const a of lane.agents) loc[a.id] = { laneId: lane.id, columnId: a.id };
   }
   const lastLane = flow[flow.length - 1];
+  const laneIndex = (id: string) => flow.findIndex(l => l.id === id);
 
   return tasks.map((t): LaneCard => {
+    const base = { taskId: t.taskId, title: t.title };
+
     // A pending gate dominates — place the card on the EXACT agent column it's
     // blocked on (the gate's sub_task), badged needs-gate. Never in Done.
     if (t.pendingGate) {
       const sub = t.pendingGate.subTask;
       if (sub && loc[sub]) {
-        return { taskId: t.taskId, title: t.title, laneId: loc[sub].laneId, columnId: loc[sub].columnId, lifecycle: 'needs-gate' };
+        return { ...base, laneId: loc[sub].laneId, laneIndex: laneIndex(loc[sub].laneId), columnId: loc[sub].columnId, lifecycle: 'needs-gate', gateId: t.pendingGate.gateId };
       }
       // Fallback: the gating lane's last agent column.
       const laneId = GATE_LANE[t.pendingGate.type] ?? lastLane.id;
       const lane = flow.find(l => l.id === laneId) ?? lastLane;
       const col = lane.agents[lane.agents.length - 1]?.id ?? 'done';
-      return { taskId: t.taskId, title: t.title, laneId: lane.id, columnId: col, lifecycle: 'needs-gate' };
+      return { ...base, laneId: lane.id, laneIndex: laneIndex(lane.id), columnId: col, lifecycle: 'needs-gate', gateId: t.pendingGate.gateId };
     }
     // Frontier = first flow agent present on the task and not completed.
     for (const lane of flow) {
@@ -113,7 +120,7 @@ export function deriveCards(flow: FlowLane[], tasks: TaskSnapshot[]): LaneCard[]
         const st = t.agentStatus[a.id];
         if (st && st !== 'completed') {
           const lifecycle: CardLifecycle = st === 'in_progress' ? 'running' : st === 'failed' ? 'needs-gate' : 'queued';
-          return { taskId: t.taskId, title: t.title, laneId: lane.id, columnId: a.id, lifecycle };
+          return { ...base, laneId: lane.id, laneIndex: laneIndex(lane.id), columnId: a.id, lifecycle };
         }
       }
     }
@@ -122,6 +129,6 @@ export function deriveCards(flow: FlowLane[], tasks: TaskSnapshot[]): LaneCard[]
     for (const lane of flow) {
       if (lane.agents.some(a => t.agentStatus[a.id] === 'completed')) doneLane = lane;
     }
-    return { taskId: t.taskId, title: t.title, laneId: doneLane.id, columnId: 'done', lifecycle: 'done' };
+    return { ...base, laneId: doneLane.id, laneIndex: laneIndex(doneLane.id), columnId: 'done', lifecycle: 'done' };
   });
 }
