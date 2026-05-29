@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { resolveLocalBin } from '../util/resolveBin';
 
 const execFileAsync = promisify(execFile);
 
@@ -93,8 +94,12 @@ export class CompilerAirlockGate {
     ]);
     if (!hasConfig) return [];
 
+    // Run the project's own eslint; skip if absent (never a stray global).
+    const eslint = resolveLocalBin(worktreePath, 'eslint');
+    if (!eslint) return [];
+
     try {
-      await execFileAsync('npx', ['eslint', '.', '--format', 'json', '--no-error-on-unmatched-pattern'], {
+      await execFileAsync(eslint, ['.', '--format', 'json', '--no-error-on-unmatched-pattern'], {
         timeout: 60_000,
         cwd: worktreePath,
       });
@@ -133,8 +138,12 @@ export class CompilerAirlockGate {
     const hasTsConfig = await fileExists(tsconfig);
     if (!hasTsConfig) return [];
 
+    // Use the project's own tsc; skip if absent (never a stray global tsc).
+    const tsc = resolveLocalBin(worktreePath, 'tsc');
+    if (!tsc) return [];
+
     try {
-      await execFileAsync('npx', ['tsc', '--noEmit', '-p', tsconfig], {
+      await execFileAsync(tsc, ['--noEmit', '-p', tsconfig], {
         timeout: 60_000,
         cwd: worktreePath,
       });
@@ -200,8 +209,12 @@ export class CompilerAirlockGate {
     const hasSchema = await fileExists(schemaPath);
     if (!hasSchema) return [];
 
+    // Use the project's own prisma; skip if absent (never a stray global).
+    const prisma = resolveLocalBin(worktreePath, 'prisma');
+    if (!prisma) return [];
+
     try {
-      await execFileAsync('npx', ['prisma', 'validate', '--schema', schemaPath], {
+      await execFileAsync(prisma, ['validate', '--schema', schemaPath], {
         timeout: 30_000,
         cwd: worktreePath,
       });
