@@ -9,6 +9,12 @@ function tempWorkspace(taskId: string): { root: string; taskDir: string } {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'contract-retry-'));
   const taskDir = path.join(root, 'arbiter', 'tasks', taskId);
   fs.mkdirSync(path.join(taskDir, 'contracts'), { recursive: true });
+  // Give the worktree a real local `tsc` so ContractValidator actually validates
+  // (resolveLocalBin requires a project-local binary — it won't use a global).
+  const binDir = path.join(taskDir, 'node_modules', '.bin');
+  fs.mkdirSync(binDir, { recursive: true });
+  const repoTsc = path.resolve('node_modules', '.bin', 'tsc');
+  try { fs.symlinkSync(repoTsc, path.join(binDir, 'tsc')); } catch { /* already linked */ }
   return { root, taskDir };
 }
 

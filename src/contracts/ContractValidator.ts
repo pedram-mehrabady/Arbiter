@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { resolveLocalBin } from '../util/resolveBin';
 
 const execFileAsync = promisify(execFile);
 
@@ -47,10 +48,14 @@ export class ContractValidator {
     const content = await fs.readFile(filePath, 'utf-8').catch(() => '');
     if (isEmptyContract(content)) return [];
 
+    // Use the project's own tsc; if it has none, skip (don't run a stray global).
+    const tsc = resolveLocalBin(worktreePath, 'tsc');
+    if (!tsc) return [];
+
     try {
       await execFileAsync(
-        'npx',
-        ['tsc', '--noEmit', '--strict', '--target', 'ES2020', '--module', 'commonjs',
+        tsc,
+        ['--noEmit', '--strict', '--target', 'ES2020', '--module', 'commonjs',
           '--moduleResolution', 'node', '--esModuleInterop', filePath],
         { cwd: worktreePath, timeout: 30_000 },
       );
@@ -70,8 +75,12 @@ export class ContractValidator {
     const content = await fs.readFile(schemaPath, 'utf-8').catch(() => '');
     if (isEmptyContract(content)) return [];
 
+    // Use the project's own prisma; skip if absent rather than running a global.
+    const prisma = resolveLocalBin(path.dirname(path.dirname(schemaPath)), 'prisma');
+    if (!prisma) return [];
+
     try {
-      await execFileAsync('npx', ['prisma', 'validate', '--schema', schemaPath], {
+      await execFileAsync(prisma, ['validate', '--schema', schemaPath], {
         timeout: 30_000,
       });
       return [];
