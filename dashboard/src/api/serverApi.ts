@@ -163,6 +163,12 @@ export class ServerApi {
     await serverWrite(relativePath, content, this.rootPath);
   }
 
+  async readLanesBoard(): Promise<{ generated: string; cards: unknown[] } | null> {
+    const raw = await serverRead('arbiter/lanes.json', this.rootPath);
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch { return null; }
+  }
+
   async listTaskIds(): Promise<string[]> {
     const entries = await serverLs('arbiter/tasks', this.rootPath);
     return entries.filter(e => e.kind === 'directory').map(e => e.name);
@@ -172,6 +178,18 @@ export class ServerApi {
     const raw = await serverRead(`arbiter/tasks/${taskId}/state.json`, this.rootPath);
     if (!raw) return null;
     try { return JSON.parse(raw); } catch { return null; }
+  }
+
+  async listAttachments(taskId: string): Promise<Array<{ name: string; content: string }>> {
+    const entries = await serverLs(`arbiter/tasks/${taskId}/attachments`, this.rootPath);
+    const out: Array<{ name: string; content: string }> = [];
+    for (const e of entries) {
+      if (e.kind === 'file') {
+        const content = await serverRead(`arbiter/tasks/${taskId}/attachments/${e.name}`, this.rootPath);
+        if (content != null) out.push({ name: e.name, content });
+      }
+    }
+    return out;
   }
 
   async readUsageForTask(taskId: string): Promise<Array<{ sub_task?: string; agent_role?: string; model?: string; input_tokens?: number; output_tokens?: number; context_tokens?: number; cost_usd?: number; ts?: string }>> {

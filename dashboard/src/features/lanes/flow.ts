@@ -24,7 +24,7 @@ export interface FlowLane {
 export const DEFAULT_FLOW: FlowLane[] = [
   {
     id: 'brainstorm', title: 'Brainstorm', enter: 'manual',
-    agents: [{ id: 'ideation', label: 'Ideation' }],
+    agents: [{ id: 'ideation', label: 'Ideation' }, { id: 'reframe', label: 'Reframe' }, { id: 'research', label: 'Research' }],
   },
   {
     id: 'design', title: 'Design & Critic', enter: 'manual', gateBeforeExit: true,
@@ -65,6 +65,8 @@ export interface LaneCard {
   laneIndex: number;
   /** when lifecycle is needs-gate, the engine gate id to resolve on a forward drop. */
   gateId?: string;
+  /** push/PR/CI status label (engine projection only): 'PR open' | 'CI ✓' | 'CI ✗' | 'debugging' | 're-pushed' | 'merged'. */
+  pushCi?: string;
 }
 
 export interface TaskSnapshot {
@@ -80,6 +82,7 @@ export interface TaskSnapshot {
 const GATE_LANE: Record<string, string> = {
   design_approval: 'design',
   plan_approval: 'plan',
+  frontend_review: 'build',
   review_approval: 'finalize',
   ui_approval: 'build',
 };

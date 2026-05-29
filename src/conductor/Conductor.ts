@@ -167,6 +167,7 @@ export class Conductor {
         profile,
         status: 'building',
       });
+      await this.refreshBoard(); // task now visible on the board with its tier
       this.sqliteStore.appendEvent(taskId, 'triage_complete', {
         tier: taskTier,
         profile,
@@ -263,6 +264,10 @@ export class Conductor {
       ? Object.values(finalState.value.sub_tasks).filter(e => e.status === 'completed').length
       : 0;
 
+    // A2: write a per-task completion report into the task folder + drop the bundle there.
+    await this.writeCompletionReport(taskId, { elapsedMs, subTasksCompleted, bundlePath: loopResult.value?.bundlePath })
+      .catch(() => { /* report is best-effort, never fails the task */ });
+
     return {
       ok: true,
       value: {
@@ -273,6 +278,76 @@ export class Conductor {
         bundlePath: loopResult.value?.bundlePath,
       },
     };
+  }
+
+  /** Re-project arbiter/board.json so the dashboard reflects live progress. Best-effort. */
+  private async refreshBoard(): Promise<void> {
+    try {
+      const { projectBoard } = await import('../board/BoardProjector');
+      await projectBoard(this.options.workspaceRoot);
+    } catch { /* board projection is best-effort */ }
+  }
+
+  /** Write arbiter/tasks/<id>/report.md (duration, tokens, context, cost, PR, bundle) + copy the bundle in. */
+  private async writeCompletionReport(
+    taskId: string,
+    info: { elapsedMs: number; subTasksCompleted: number; bundlePath?: string },
+  ): Promise<void> {
+    const taskDir = path.join(this.options.workspaceRoot, 'arbiter', 'tasks', taskId);
+
+    // Per-task usage rows from the shared usage log.
+    let rows: Array<{ agent_role?: string; model?: string; input_tokens?: number; output_tokens?: number; context_tokens?: number; cost_usd?: number }> = [];
+    try {
+      const raw = await fs.readFile(path.join(this.options.workspaceRoot, 'arbiter', 'usage.jsonl'), 'utf-8');
+      rows = raw.split('\n').filter(Boolean)
+        .map(l => { try { return JSON.parse(l); } catch { return null; } })
+        .filter((r): r is NonNullable<typeof r> => !!r && r.task_id === taskId);
+    } catch { /* no usage */ }
+
+    const sum = (f: (r: typeof rows[number]) => number) => rows.reduce((a, r) => a + f(r), 0);
+    const tokens = sum(r => (r.input_tokens ?? 0) + (r.output_tokens ?? 0));
+    const ctx = sum(r => r.context_tokens ?? 0);
+    const cost = sum(r => r.cost_usd ?? 0);
+
+    // PR url from the pr_opened event, if any.
+    let prUrl = '';
+    try {
+      const ev = this.sqliteStore.getEvents(taskId, 'pr_opened');
+      if (ev.length) prUrl = (JSON.parse(ev[ev.length - 1].payload) as { url?: string }).url ?? '';
+    } catch { /* none */ }
+
+    const mins = Math.floor(info.elapsedMs / 60000);
+    const secs = Math.round((info.elapsedMs % 60000) / 1000);
+    const stepTable = rows.map(r =>
+      `| ${r.agent_role ?? '—'} | ${(r.model ?? '').replace('claude-', '')} | ${(r.input_tokens ?? 0) + (r.output_tokens ?? 0)} | ${r.context_tokens ?? 0} | $${(r.cost_usd ?? 0).toFixed(4)} |`,
+    ).join('\n');
+
+    const report = [
+      `# ${taskId} — Completion Report`,
+      '',
+      `- **Outcome:** completed`,
+      `- **Duration:** ${mins}m ${secs}s`,
+      `- **Steps completed:** ${info.subTasksCompleted}`,
+      `- **Total tokens:** ${tokens.toLocaleString()}`,
+      `- **Context tokens:** ${ctx.toLocaleString()}`,
+      `- **Cost:** $${cost.toFixed(4)}`,
+      `- **Pull request:** ${prUrl || '—'}`,
+      `- **Evidence bundle:** ${info.bundlePath ? path.basename(info.bundlePath) : '—'}`,
+      '',
+      '## Steps',
+      '| Step | Model | Tokens | Context | Cost |',
+      '|---|---|---|---|---|',
+      stepTable || '| _(no recorded steps)_ | | | | |',
+      '',
+    ].join('\n');
+
+    await fs.mkdir(taskDir, { recursive: true });
+    await fs.writeFile(path.join(taskDir, 'report.md'), report, 'utf-8');
+
+    // Drop the evidence bundle alongside the task for one-stop archival.
+    if (info.bundlePath) {
+      try { await fs.copyFile(info.bundlePath, path.join(taskDir, path.basename(info.bundlePath))); } catch { /* ok */ }
+    }
   }
 
   // P0-1: On resume, reset interrupted sub-tasks and verify completed ones.
@@ -670,6 +745,7 @@ export class Conductor {
       await Promise.all(batch.map(([subTaskId, entry]) =>
         this.runSubTask(state.task_id, subTaskId, entry, state),
       ));
+      await this.refreshBoard(); // keep board.json live as agents complete
     }
 
     return { ok: true, value: {} };
@@ -1402,6 +1478,8 @@ export class Conductor {
     if (gateType === 'design_approval') return gates.design;
     if (gateType === 'plan_approval')   return gates.plan;
     if (gateType === 'review_approval') return gates.review;
+    // Opt-in: only fires when explicitly enabled (default off, so existing pipelines are unaffected).
+    if (gateType === 'frontend_review') return (gates as unknown as Record<string, boolean>).frontend_review === true;
     return true; // debugger_major_rewrite is always enabled
   }
 }

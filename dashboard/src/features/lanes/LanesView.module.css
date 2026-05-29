@@ -90,10 +90,14 @@
 .createForm { display: flex; flex-direction: column; gap: 6px; background: var(--panel, #fff); border: 1px solid var(--accent); border-radius: 8px; padding: 8px; }
 .createInput, .createArea { border: 1px solid var(--border, #d1d5db); border-radius: 6px; padding: 6px 8px; font: inherit; font-size: 12px; }
 .createArea { resize: vertical; }
+.attachRow { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); cursor: pointer; }
+.attachRow input[type=file] { font-size: 10px; max-width: 130px; }
 .createActions { display: flex; gap: 6px; }
 .createBtn { flex: 1; background: var(--accent); color: #fff; border: none; border-radius: 6px; padding: 5px; font-size: 12px; font-weight: 600; cursor: pointer; }
 .cancelBtn { background: var(--bg, #f3f4f6); color: var(--muted); border: none; border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer; }
 .cardId { font-size: 12px; font-weight: 700; color: var(--text); }
+.cardBadges { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+.ciBadge { font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 999px; background: #ede9fe; color: #5b21b6; white-space: nowrap; }
 .badge { font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 999px; text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; }
 .lc_queued { background: #e5e7eb; color: #4b5563; }
 .lc_running { background: #dbeafe; color: #1d4ed8; }

@@ -40,16 +40,17 @@ describe('GateRegistry', () => {
     expect(registry.isBlocked('tech-writer', ['plan_approval', 'review_approval'])).toBe(true);
   });
 
-  it('allGateTypes returns all 4 standard gates', () => {
+  it('allGateTypes returns all standard gates (incl. opt-in frontend_review)', () => {
     const types = registry.allGateTypes();
-    expect(types).toHaveLength(4);
+    expect(types).toHaveLength(5);
     expect(types).toContain('design_approval');
     expect(types).toContain('plan_approval');
+    expect(types).toContain('frontend_review');
     expect(types).toContain('review_approval');
     expect(types).toContain('debugger_major_rewrite');
   });
 
   it('STANDARD_GATES export has correct length', () => {
-    expect(STANDARD_GATES).toHaveLength(4);
+    expect(STANDARD_GATES).toHaveLength(5);
   });
 });

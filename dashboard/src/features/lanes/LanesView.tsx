@@ -13,11 +13,12 @@ const LIFECYCLE_LABEL: Record<CardLifecycle, string> = {
 };
 
 export function LanesView() {
-  const { laneCards, isConnected, createBrainstormTask, resolveEngineGate, showToast } = useAppStore(useShallow((s) => ({
+  const { laneCards, isConnected, createBrainstormTask, resolveEngineGate, promoteTask, showToast } = useAppStore(useShallow((s) => ({
     laneCards: s.laneCards,
     isConnected: s.isConnected,
     createBrainstormTask: s.createBrainstormTask,
     resolveEngineGate: s.resolveEngineGate,
+    promoteTask: s.promoteTask,
     showToast: s.showToast,
   })));
 
@@ -26,6 +27,7 @@ export function LanesView() {
   const [creating, setCreating] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newIdea, setNewIdea] = useState('');
+  const [attachment, setAttachment] = useState<{ name: string; content: string } | null>(null);
   const [dragged, setDragged] = useState<LaneCard | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
   const downPos = useRef<{ x: number; y: number } | null>(null);
@@ -39,16 +41,23 @@ export function LanesView() {
     if (card.gateId) {
       void resolveEngineGate(card.gateId, 'approved'); // approving the gate advances the running pipeline
     } else if (card.laneId === 'brainstorm') {
-      showToast('Idea ready — run it with: arbiter conduct <id> --provider mock (the board can’t spawn the engine)', 7000);
+      void promoteTask(card.taskId); // hand the cooked idea to the factory daemon
     } else {
       showToast('This task advances automatically — no gate to approve here', 5000);
     }
   };
 
+  const onPickFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try { setAttachment({ name: file.name, content: await file.text() }); }
+    catch { showToast('Could not read that file (text files only)', 4000); }
+  };
+
   const submitIdea = async () => {
     if (!newTitle.trim()) return;
-    const id = await createBrainstormTask(newTitle, newIdea || newTitle);
-    setNewTitle(''); setNewIdea(''); setCreating(false);
+    const id = await createBrainstormTask(newTitle, newIdea || newTitle, attachment ?? undefined);
+    setNewTitle(''); setNewIdea(''); setAttachment(null); setCreating(false);
     if (id) setOpenTask(id);
   };
   const toggle = (id: string) =>
@@ -109,6 +118,10 @@ export function LanesView() {
                                 onKeyDown={(e) => { if (e.key === 'Enter') void submitIdea(); if (e.key === 'Escape') setCreating(false); }} />
                               <textarea className={css.createArea} placeholder="Describe the idea (optional)…" rows={3}
                                 value={newIdea} onChange={(e) => setNewIdea(e.target.value)} />
+                              <label className={css.attachRow}>
+                                <input type="file" accept=".md,.txt,.json,.yaml,.yml,text/*" onChange={onPickFile} />
+                                {attachment ? `📎 ${attachment.name}` : '📎 Attach a doc (optional)'}
+                              </label>
                               <div className={css.createActions}>
                                 <button className={css.createBtn} onClick={() => void submitIdea()}>Start</button>
                                 <button className={css.cancelBtn} onClick={() => setCreating(false)}>Cancel</button>
@@ -133,8 +146,11 @@ export function LanesView() {
                             }}
                           >
                             <span className={css.cardId}>{card.taskId}</span>
-                            <span className={`${css.badge} ${css['lc_' + card.lifecycle.replace('-', '_')]}`}>
-                              {LIFECYCLE_LABEL[card.lifecycle]}
+                            <span className={css.cardBadges}>
+                              {card.pushCi && <span className={css.ciBadge}>{card.pushCi}</span>}
+                              <span className={`${css.badge} ${css['lc_' + card.lifecycle.replace('-', '_')]}`}>
+                                {LIFECYCLE_LABEL[card.lifecycle]}
+                              </span>
                             </span>
                           </div>
                         ))}

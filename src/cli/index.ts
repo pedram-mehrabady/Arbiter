@@ -859,6 +859,59 @@ syncCmd
   });
 
 // ── arbiter dashboard ─────────────────────────────────────────────────────────
+// ── arbiter preview ─────────────────────────────────────────────────────────
+program.command('preview <task-id>')
+  .description('Run a task\'s app (dev server) and expose its URL to the dashboard for live review')
+  .option('--dir <path>', 'Directory of the app to run (default: workspace root)')
+  .option('--workspace <path>', 'Workspace root (default: cwd)', process.cwd())
+  .action(async (taskId: string, opts: { dir?: string; workspace: string }) => {
+    const root = path.resolve(opts.workspace);
+    const appDir = opts.dir ? path.resolve(opts.dir) : root;
+    const previewPath = path.join(root, 'arbiter', 'tasks', taskId, 'preview.json');
+    const { startPreview } = await import('../preview/PreviewServer');
+    const handle = await startPreview(appDir, (m) => console.log(`[preview] ${m}`));
+    if (!handle) { console.error('No dev server to run.'); process.exit(1); }
+    await fs.mkdir(path.dirname(previewPath), { recursive: true });
+    await fs.writeFile(previewPath, JSON.stringify({ url: handle.url, port: handle.port, script: handle.script, startedAt: new Date().toISOString() }, null, 2));
+    console.log(`\n  ✓ Preview for ${taskId} → ${handle.url}\n  (open the task in the dashboard → Preview tab. Ctrl+C to stop.)`);
+    const cleanup = async () => { await handle.stop(); await fs.rm(previewPath, { force: true }).catch(() => {}); process.exit(0); };
+    process.on('SIGINT', cleanup);
+    process.on('SIGTERM', cleanup);
+    await new Promise(() => {}); // keep alive
+  });
+
+// ── arbiter factory ─────────────────────────────────────────────────────────
+program.command('factory')
+  .description('Run the factory daemon — pick up ready tasks, run them through the pipeline, keep the board live')
+  .option('--workspace <path>', 'Workspace root (default: cwd)', process.cwd())
+  .option('--provider <type>', 'Provider for all agents (use "mock" for a free local run)')
+  .option('--max-tasks <n>', 'Max concurrent in-flight tasks', '2')
+  .option('--interval <ms>', 'Watch interval in ms', '3000')
+  .option('--once', 'Run a single tick and exit (no watch loop)', false)
+  .action(async (opts: { workspace: string; provider?: string; maxTasks: string; interval: string; once?: boolean }) => {
+    const { FactoryDaemon } = await import('../factory/FactoryDaemon');
+    let provider: unknown;
+    if (opts.provider === 'mock') { const { MockProvider } = await import('../providers/MockProvider'); provider = new MockProvider(); console.log('Factory using MockProvider — no agents billed.\n'); }
+    const daemon = new FactoryDaemon({
+      workspaceRoot: path.resolve(opts.workspace),
+      provider,
+      maxTasks: parseInt(opts.maxTasks, 10) || 2,
+      intervalMs: parseInt(opts.interval, 10) || 3000,
+    });
+    process.on('SIGINT', () => { daemon.stop(); console.log('\nFactory stopped.'); process.exit(0); });
+    if (opts.once) await daemon.tick(); else await daemon.watch();
+  });
+
+// ── arbiter board ──────────────────────────────────────────────────────────
+program.command('board')
+  .description('Project current task states into arbiter/board.json (authoritative board for the dashboard)')
+  .option('--workspace <path>', 'Workspace root (default: cwd)', process.cwd())
+  .action(async (opts: { workspace: string }) => {
+    const { projectBoard } = await import('../board/BoardProjector');
+    const board = await projectBoard(path.resolve(opts.workspace));
+    console.log(`Wrote arbiter/lanes.json — ${board.cards.length} card(s) across ${board.lanes.length} lanes.`);
+  });
+
 program.command('dashboard')
   .description('Start the Arbiter dashboard')
   .option('--port <port>', 'Port to serve on', '3070')

@@ -41,8 +41,10 @@ interface AppStore {
   /** Cards for the swim-lane board, derived from each task's state.json + pending gates. */
   laneCards: LaneCard[];
   loadLanes: () => Promise<void>;
-  /** Create a new task in the Brainstorm lane (writes task.md + an ideation state). */
-  createBrainstormTask: (title: string, idea: string) => Promise<string | null>;
+  /** Create a new task in the Brainstorm lane (writes task.md + an ideation state, + optional attachment). */
+  createBrainstormTask: (title: string, idea: string, attachment?: { name: string; content: string }) => Promise<string | null>;
+  /** Promote a brainstorm idea into the pipeline (writes promote.flag for the factory daemon). */
+  promoteTask: (taskId: string) => Promise<void>;
   cliStats: CliStats | null;
   agentData: Record<string, AgentData>;
   messages: CliMessage[];
@@ -242,7 +244,14 @@ export const useAppStore = create<AppStore>()(
           listTaskIds?: () => Promise<string[]>;
           readTaskState?: (id: string) => Promise<{ sub_tasks?: Record<string, { agent_role: string; status: string }> } | null>;
           readPendingGates?: () => Promise<Array<{ gate_id: string; task_id: string; type: string; sub_task?: string; status: string }>>;
+          readLanesBoard?: () => Promise<{ cards: LaneCard[] } | null>;
         };
+        // Prefer the engine's authoritative projection (arbiter/lanes.json) when present.
+        const projected = api.readLanesBoard ? await api.readLanesBoard() : null;
+        if (projected && Array.isArray(projected.cards)) {
+          set({ laneCards: projected.cards });
+          return;
+        }
         if (!api.listTaskIds || !api.readTaskState) return;
         const ids = await api.listTaskIds();
         const gates = (await api.readPendingGates?.() ?? []).filter(g => g.status === 'pending');
@@ -261,7 +270,7 @@ export const useAppStore = create<AppStore>()(
         set({ laneCards: deriveCards(DEFAULT_FLOW, snapshots) });
       },
 
-      createBrainstormTask: async (title, idea) => {
+      createBrainstormTask: async (title, idea, attachment) => {
         const { liveApi } = get();
         if (!liveApi) { get().showToast('Connect a repo first'); return null; }
         const api = liveApi as unknown as { writeRepoFile?: (p: string, c: string) => Promise<void> };
@@ -275,12 +284,28 @@ export const useAppStore = create<AppStore>()(
         try {
           await api.writeRepoFile(`arbiter/tasks/${taskId}/task.md`, md);
           await api.writeRepoFile(`arbiter/tasks/${taskId}/state.json`, JSON.stringify(state, null, 2));
+          if (attachment && attachment.content) {
+            const safe = attachment.name.replace(/[^a-zA-Z0-9._-]+/g, '_') || 'attachment.md';
+            await api.writeRepoFile(`arbiter/tasks/${taskId}/attachments/${safe}`, attachment.content);
+          }
           await get().loadLanes();
           get().showToast(`Started brainstorm: ${taskId}`);
           return taskId;
         } catch (e) {
           get().showToast(`Could not create task: ${(e as Error).message}`, 5000);
           return null;
+        }
+      },
+      promoteTask: async (taskId) => {
+        const { liveApi } = get();
+        const api = liveApi as unknown as { writeRepoFile?: (p: string, c: string) => Promise<void> } | null;
+        if (!api?.writeRepoFile) { get().showToast('This connection cannot promote tasks'); return; }
+        try {
+          await api.writeRepoFile(`arbiter/tasks/${taskId}/promote.flag`, new Date().toISOString());
+          get().showToast('Promoted — the factory daemon will run it');
+          await get().loadLanes();
+        } catch (e) {
+          get().showToast(`Could not promote: ${(e as Error).message}`, 5000);
         }
       },
       cliStats: null,

@@ -20,6 +20,14 @@ export class LiveApi {
     } catch { return null; }
   }
 
+  /** Authoritative board projection written by the engine (arbiter/lanes.json), or null. */
+  async readLanesBoard(): Promise<{ generated: string; cards: unknown[] } | null> {
+    try {
+      const fh = await this.dir.getFileHandle('lanes.json', { create: false });
+      return JSON.parse(await (await fh.getFile()).text());
+    } catch { return null; }
+  }
+
   // ── Per-task state (arbiter/tasks/<id>/state.json) ───────────────────────
   async listTaskIds(): Promise<string[]> {
     const ids: string[] = [];
@@ -39,6 +47,22 @@ export class LiveApi {
       const fh = await taskDir.getFileHandle('state.json', { create: false });
       return JSON.parse(await (await fh.getFile()).text());
     } catch { return null; }
+  }
+
+  /** Attachments (initial docs) added to a task: arbiter/tasks/<id>/attachments/*. */
+  async listAttachments(taskId: string): Promise<Array<{ name: string; content: string }>> {
+    const out: Array<{ name: string; content: string }> = [];
+    try {
+      const tasksDir = await this.dir.getDirectoryHandle('tasks', { create: false });
+      const taskDir = await tasksDir.getDirectoryHandle(taskId, { create: false });
+      const att = await taskDir.getDirectoryHandle('attachments', { create: false });
+      for await (const [name, handle] of att as unknown as AsyncIterable<[string, FileSystemHandle]>) {
+        if (handle.kind === 'file') {
+          try { out.push({ name, content: await (await (handle as FileSystemFileHandle).getFile()).text() }); } catch { /* skip */ }
+        }
+      }
+    } catch { /* no attachments */ }
+    return out;
   }
 
   /** Per-step usage rows for a task, from arbiter/usage.jsonl (what ran, tokens, context, cost, ts). */

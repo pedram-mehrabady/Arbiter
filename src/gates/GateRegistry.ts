@@ -6,6 +6,7 @@ import { AgentRole } from '../types/index';
 export type GateType =
   | 'design_approval'
   | 'plan_approval'
+  | 'frontend_review'
   | 'review_approval'
   | 'debugger_major_rewrite';
 
@@ -31,6 +32,13 @@ export const STANDARD_GATES: GateSpec[] = [
     triggerAfterAgent: 'plan',
     description: 'Approve the sub-task breakdown and complexity scores before agents spawn.',
     blocksAgents: ['backend', 'frontend'],
+  },
+  {
+    type: 'frontend_review',
+    label: 'Frontend Review Gate',
+    triggerAfterAgent: 'frontend',
+    description: 'Review the running frontend live and request changes before accepting. Opt-in (gates.frontend_review).',
+    blocksAgents: ['test-writer', 'reviewer', 'tech-writer'],
   },
   {
     type: 'review_approval',
