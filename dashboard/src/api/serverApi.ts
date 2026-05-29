@@ -7,7 +7,7 @@ import type {
   ArbiterState, CliStats, AgentData, ImprovementItem,
   PlanOrderRequest, PlanOrderResult, CliMessage, BoardData,
   ConductorSession, GateName, ArbiterConfig, AgentsConfig,
-  TaskTier, IronFunnelStatus, IronFunnelGateStatus, CriticalPathFlag,
+  TaskTier, IronFunnelStatus, IronFunnelGateStatus, CriticalPathFlag, EngineGate,
 } from './types';
 
 async function serverRead(relPath: string, root: string): Promise<string | null> {
@@ -161,6 +161,23 @@ export class ServerApi {
 
   async writeRepoFile(relativePath: string, content: string): Promise<void> {
     await serverWrite(relativePath, content, this.rootPath);
+  }
+
+  async readPendingGates(): Promise<EngineGate[]> {
+    const raw = await serverRead('arbiter/pending-gates.json', this.rootPath);
+    if (!raw) return [];
+    try { const d = JSON.parse(raw); return Array.isArray(d) ? d : []; } catch { return []; }
+  }
+
+  async resolveGate(gateId: string, decision: 'approved' | 'rejected', comment?: string): Promise<boolean> {
+    const gates = await this.readPendingGates();
+    const gate = gates.find(g => g.gate_id === gateId);
+    if (!gate || gate.status !== 'pending') return false;
+    gate.status = decision;
+    gate.resolved_at = new Date().toISOString();
+    if (comment) gate.comment = comment;
+    await serverWrite('arbiter/pending-gates.json', JSON.stringify(gates, null, 2), this.rootPath);
+    return true;
   }
 
   async listExecPlanFolder(stageDir: string, taskId: string, execPlanDir = 'compliance/exec-plan'): Promise<Array<{ name: string; mtime_ms: number }>> {

@@ -27,7 +27,7 @@ export default function App() {
   const [needsSetup, setNeedsSetup] = useState(() => getDeveloperName() === null);
   const [profileOpen, setProfileOpen] = useState(false);
 
-  const { openModal, arbiterState, activeConductorGate, conductorSessions, openConductorGate, isConnected, connectDev, restoreConnection, reconnectSaved, pendingReconnectName, settings } = useAppStore(useShallow((s) => ({
+  const { openModal, arbiterState, activeConductorGate, conductorSessions, openConductorGate, isConnected, connectDev, restoreConnection, reconnectSaved, pendingReconnectName, pendingEngineGates, resolveEngineGate, settings } = useAppStore(useShallow((s) => ({
     openModal:           s.openModal,
     arbiterState:        s.arbiterState,
     activeConductorGate: s.activeConductorGate,
@@ -38,6 +38,8 @@ export default function App() {
     restoreConnection:   s.restoreConnection,
     reconnectSaved:      s.reconnectSaved,
     pendingReconnectName: s.pendingReconnectName,
+    pendingEngineGates:  s.pendingEngineGates,
+    resolveEngineGate:   s.resolveEngineGate,
     settings:            s.settings,
   })));
 
@@ -69,6 +71,23 @@ export default function App() {
         <div className={styles.reconnectBanner}>
           <span>Reconnect <strong>{pendingReconnectName}</strong> to restore your repo.</span>
           <button type="button" onClick={() => { void reconnectSaved(); }}>Reconnect</button>
+        </div>
+      )}
+
+      {pendingEngineGates.length > 0 && (
+        <div className={styles.gateBanner}>
+          {pendingEngineGates.map((g) => (
+            <div key={g.gate_id} className={styles.gateRow}>
+              <span className={styles.gateInfo}>
+                ⏸ <strong>{g.type}</strong> · {g.task_id}
+                <span className={styles.gateContext}>{g.context}</span>
+              </span>
+              <span className={styles.gateActions}>
+                <button type="button" className={styles.gateApprove} onClick={() => { void resolveEngineGate(g.gate_id, 'approved'); }}>Approve</button>
+                <button type="button" className={styles.gateReject} onClick={() => { void resolveEngineGate(g.gate_id, 'rejected'); }}>Reject</button>
+              </span>
+            </div>
+          ))}
         </div>
       )}
 

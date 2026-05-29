@@ -1,4 +1,4 @@
-import type { ArbiterState, CliStats, AgentData, ImprovementItem, PlanOrderRequest, PlanOrderResult, CliMessage, BoardData, ConductorSession, GateName, ArbiterConfig, AgentsConfig } from './types';
+import type { ArbiterState, CliStats, AgentData, ImprovementItem, PlanOrderRequest, PlanOrderResult, CliMessage, BoardData, ConductorSession, GateName, ArbiterConfig, AgentsConfig, EngineGate } from './types';
 
 export class LiveApi {
   constructor(
@@ -18,6 +18,34 @@ export class LiveApi {
       const fh = await this.dir.getFileHandle('mcp-state.json', { create: false });
       return JSON.parse(await (await fh.getFile()).text());
     } catch { return null; }
+  }
+
+  // ── Engine human gates (arbiter/pending-gates.json) ──────────────────────
+  async readPendingGates(): Promise<EngineGate[]> {
+    try {
+      const fh = await this.dir.getFileHandle('pending-gates.json', { create: false });
+      const data = JSON.parse(await (await fh.getFile()).text());
+      return Array.isArray(data) ? data : [];
+    } catch { return []; }
+  }
+
+  /**
+   * Resolve a gate exactly as the engine's GatePoller does: flip status
+   * pending→approved/rejected + stamp resolved_at, then rewrite the file. The
+   * Conductor polls this file every 5s and continues on a non-pending status.
+   */
+  async resolveGate(gateId: string, decision: 'approved' | 'rejected', comment?: string): Promise<boolean> {
+    const gates = await this.readPendingGates();
+    const gate = gates.find(g => g.gate_id === gateId);
+    if (!gate || gate.status !== 'pending') return false;
+    gate.status = decision;
+    gate.resolved_at = new Date().toISOString();
+    if (comment) gate.comment = comment;
+    const fh = await this.dir.getFileHandle('pending-gates.json', { create: true });
+    const w = await fh.createWritable();
+    await w.write(JSON.stringify(gates, null, 2));
+    await w.close();
+    return true;
   }
 
   async readBoard(): Promise<BoardData | null> {

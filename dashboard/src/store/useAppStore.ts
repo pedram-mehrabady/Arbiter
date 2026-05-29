@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { ArbiterState, AppSettings, CliStats, AgentData, TabKey, WidgetId, ArbiterConfig, AgentsConfig } from '../api/types';
+import type { ArbiterState, AppSettings, CliStats, AgentData, TabKey, WidgetId, ArbiterConfig, AgentsConfig, EngineGate } from '../api/types';
 import { DEFAULT_SETTINGS, DEFAULT_WIDGET_ORDER, DEFAULT_WIDGET_SIZES, DEFAULT_ARBITER_CONFIG } from '../api/types';
 import { LiveApi, connectRepo } from '../api/live';
 import { saveRepoHandles, loadRepoHandles, queryHandlePermission, requestHandlePermission } from '../lib/handleStore';
@@ -33,6 +33,10 @@ interface AppStore {
 
   // ── Arbiter state ─────────────────────────────────────────
   arbiterState: ArbiterState;
+  /** Human gates from the engine's pending-gates.json (what a `conduct` run actually waits on). */
+  pendingEngineGates: EngineGate[];
+  /** Approve/reject an engine gate — rewrites pending-gates.json so the Conductor continues. */
+  resolveEngineGate: (gateId: string, decision: 'approved' | 'rejected') => Promise<void>;
   cliStats: CliStats | null;
   agentData: Record<string, AgentData>;
   messages: CliMessage[];
@@ -210,6 +214,20 @@ export const useAppStore = create<AppStore>()(
 
       // ── Arbiter state ────────────────────────────────────
       arbiterState: { jobs: [] },
+      pendingEngineGates: [],
+      resolveEngineGate: async (gateId, decision) => {
+        const { liveApi } = get();
+        if (!liveApi) { get().showToast('Connect the repo first'); return; }
+        const api = liveApi as unknown as { resolveGate?: (id: string, d: 'approved' | 'rejected') => Promise<boolean> };
+        const ok = api.resolveGate ? await api.resolveGate(gateId, decision) : false;
+        if (ok) {
+          // Optimistically drop it from the list; the next poll reconciles.
+          set((s) => ({ pendingEngineGates: s.pendingEngineGates.filter((g) => g.gate_id !== gateId) }));
+          get().showToast(`Gate ${decision}`);
+        } else {
+          get().showToast('Gate already resolved or not found', 4000);
+        }
+      },
       cliStats: null,
       agentData: {},
       messages: [],
@@ -231,12 +249,13 @@ export const useAppStore = create<AppStore>()(
       poll: async () => {
         const { liveApi } = get();
         if (!liveApi) return;
-        const [state, stats, agents, msgs, board] = await Promise.all([
+        const [state, stats, agents, msgs, board, engineGates] = await Promise.all([
           liveApi.readState(),
           liveApi.readCliStats(),
           liveApi.readAgents(),
           liveApi.readMessages(),
           liveApi.readBoard(),
+          liveApi.readPendingGates(),
         ]);
 
         // Collect tickets to probe: board-based active ones + any plan marked "ready"
@@ -327,6 +346,7 @@ export const useAppStore = create<AppStore>()(
 
         set({
           arbiterState: { ...baseState, jobs: mergedJobs, pending_gates: pendingGates },
+          pendingEngineGates: (engineGates ?? []).filter((g) => g.status === 'pending'),
           cliStats: stats,
           agentData: agents,
           messages,
