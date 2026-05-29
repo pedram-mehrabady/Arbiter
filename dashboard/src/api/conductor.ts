@@ -4,7 +4,7 @@
  * Wraps the Anthropic SDK for the gate-side chat. The conductor is a persistent
  * LLM session that carries context across all three gates for a single task.
  */
-import Anthropic from '@anthropic-ai/sdk';
+import { anthropicCreateMessage } from './anthropicRest';
 import type { GateName, ConductorSession, ConductorMessage, ConductorOpenItem } from './types';
 
 const GATE_LABELS: Record<GateName, string> = {
@@ -72,8 +72,6 @@ export async function sendConductorMessage(
   userText: string,
   artifacts: Record<string, string>,
 ): Promise<ConductorTurn> {
-  const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
-
   const systemPrompt = buildConductorSystemPrompt(
     session.current_gate,
     session.task_id,
@@ -87,15 +85,13 @@ export async function sendConductorMessage(
   );
   history.push({ role: 'user', content: userText });
 
-  const response = await client.messages.create({
+  const rawText = (await anthropicCreateMessage({
+    apiKey,
     model: 'claude-opus-4-7',
-    max_tokens: 2048,
+    maxTokens: 2048,
     system: systemPrompt,
     messages: history,
-  });
-
-  const block = response.content.find((b) => b.type === 'text');
-  const rawText = block?.type === 'text' ? block.text : '(no response)';
+  })) || '(no response)';
 
   // Parse signals from response
   const allResolved = rawText.includes('[ALL_RESOLVED]');

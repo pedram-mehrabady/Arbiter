@@ -67,8 +67,8 @@ jobs:
           test -f /tmp/arbiter-smoke/arbiter.config.json && echo "OK: arbiter.config.json present"
           test -d /tmp/arbiter-smoke/arbiter && echo "OK: arbiter/ folder present"
 
-  dashboard-typecheck:
-    name: Dashboard Typecheck
+  dashboard:
+    name: Dashboard (typecheck · build · test)
     runs-on: ubuntu-latest
 
     steps:
@@ -88,10 +88,20 @@ jobs:
         run: npx tsc --noEmit
         working-directory: dashboard
 
+      # Production build must succeed — guards against Node-only deps (e.g. the
+      # Anthropic SDK) leaking into the browser bundle and breaking deploys.
+      - name: Build dashboard
+        run: npm run build
+        working-directory: dashboard
+
+      - name: Test dashboard
+        run: npm test
+        working-directory: dashboard
+
   publish:
     name: Publish to npm
     runs-on: ubuntu-latest
-    needs: [test, smoke-test, dashboard-typecheck]
+    needs: [test, smoke-test, dashboard]
     # Only on a real merge to main — never on PRs.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
