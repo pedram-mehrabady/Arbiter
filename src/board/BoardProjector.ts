@@ -15,7 +15,7 @@ export const DEFAULT_FLOW: FlowLane[] = [
 ];
 
 export type CardLifecycle = 'queued' | 'running' | 'needs-gate' | 'done';
-export interface LaneCard { taskId: string; title: string; laneId: string; laneIndex: number; columnId: string; lifecycle: CardLifecycle; gateId?: string; pushCi?: string }
+export interface LaneCard { taskId: string; title: string; laneId: string; laneIndex: number; columnId: string; lifecycle: CardLifecycle; gateId?: string; pushCi?: string; epicId?: string; storyId?: string }
 export interface TaskSnapshot { taskId: string; title: string; agentStatus: Record<string, string>; pendingGate?: { type: string; subTask?: string; gateId?: string } }
 export interface BoardJson { generated: string; lanes: FlowLane[]; cards: LaneCard[] }
 
@@ -114,6 +114,7 @@ export async function projectBoard(workspaceRoot: string): Promise<BoardJson> {
   // Per-task snapshots.
   const rank = (s: string) => (s === 'in_progress' ? 3 : s === 'failed' ? 2 : s === 'pending' ? 1 : 0);
   const snapshots: TaskSnapshot[] = [];
+  const metaById = new Map<string, { epicId?: string; storyId?: string }>();
   let taskIds: string[] = [];
   try { taskIds = (await fs.readdir(path.join(arbiterDir, 'tasks'), { withFileTypes: true })).filter(d => d.isDirectory()).map(d => d.name); } catch { /* none */ }
   for (const id of taskIds) {
@@ -125,15 +126,27 @@ export async function projectBoard(workspaceRoot: string): Promise<BoardJson> {
         if (!cur || rank(sub.status) > rank(cur)) agentStatus[sub.agent_role] = sub.status;
       }
       snapshots.push({ taskId: id, title: id, agentStatus, pendingGate: gateByTask.get(id) });
+      try {
+        const meta = JSON.parse(await fs.readFile(path.join(arbiterDir, 'tasks', id, 'meta.json'), 'utf-8')) as { epicId?: string; storyId?: string };
+        if (meta.epicId || meta.storyId) metaById.set(id, { epicId: meta.epicId, storyId: meta.storyId });
+      } catch { /* no epic/story link */ }
     } catch { /* skip unreadable task */ }
   }
 
   const cards = deriveCards(flow, snapshots);
+  for (const c of cards) { const m = metaById.get(c.taskId); if (m) { c.epicId = m.epicId; c.storyId = m.storyId; } }
   await annotatePushCi(workspaceRoot, cards); // D1: tag cards with push/PR/CI status
 
   const board: BoardJson = { generated: new Date().toISOString(), lanes: flow, cards };
   await fs.mkdir(arbiterDir, { recursive: true });
   // Written to lanes.json (NOT board.json — that name belongs to the legacy board format).
   await fs.writeFile(path.join(arbiterDir, 'lanes.json'), JSON.stringify(board, null, 2), 'utf-8');
+
+  // Also project the Epic → Story rollup for the dashboard (best-effort).
+  try {
+    const { listEpics } = await import('../epics/EpicStore');
+    await fs.writeFile(path.join(arbiterDir, 'epics.json'), JSON.stringify({ generated: board.generated, epics: await listEpics(workspaceRoot) }, null, 2), 'utf-8');
+  } catch { /* epics optional */ }
+
   return board;
 }

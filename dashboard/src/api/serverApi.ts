@@ -163,6 +163,21 @@ export class ServerApi {
     await serverWrite(relativePath, content, this.rootPath);
   }
 
+  async readEpics(): Promise<Array<{ id: string; title: string; total: number; done: number; pct: number; stories: Array<{ id: string; title: string; total: number; done: number; pct: number }> }>> {
+    const raw = await serverRead('arbiter/epics.json', this.rootPath);
+    if (!raw) return [];
+    try { const j = JSON.parse(raw); return Array.isArray(j.epics) ? j.epics : []; } catch { return []; }
+  }
+
+  async createEpic(title: string, doc: string): Promise<string> {
+    const slug = title.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 16) || 'EPIC';
+    const id = `EPIC-${slug}-${Date.now().toString(36).slice(-5).toUpperCase()}`;
+    await serverWrite(`arbiter/epics/${id}/epic.md`, `# ${title.trim()}\n\n${doc.trim()}\n`, this.rootPath);
+    await serverWrite(`arbiter/epics/${id}/epic.json`, JSON.stringify({ id, title: title.trim(), createdAt: new Date().toISOString(), stories: [] }, null, 2), this.rootPath);
+    await serverWrite(`arbiter/epics/${id}/decompose.flag`, new Date().toISOString(), this.rootPath);
+    return id;
+  }
+
   async readLanesBoard(): Promise<{ generated: string; cards: unknown[] } | null> {
     const raw = await serverRead('arbiter/lanes.json', this.rootPath);
     if (!raw) return null;

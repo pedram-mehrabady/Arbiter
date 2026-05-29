@@ -20,6 +20,31 @@ export class LiveApi {
     } catch { return null; }
   }
 
+  /** Epic → Story rollup projected by the engine (arbiter/epics.json). */
+  async readEpics(): Promise<Array<{ id: string; title: string; total: number; done: number; pct: number; stories: Array<{ id: string; title: string; total: number; done: number; pct: number }> }>> {
+    try {
+      const fh = await this.dir.getFileHandle('epics.json', { create: false });
+      const j = JSON.parse(await (await fh.getFile()).text());
+      return Array.isArray(j.epics) ? j.epics : [];
+    } catch { return []; }
+  }
+
+  /** Create an Epic from the dashboard: writes epic.md + epic.json + decompose.flag (the daemon decomposes). */
+  async createEpic(title: string, doc: string): Promise<string> {
+    const slug = title.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 16) || 'EPIC';
+    const id = `EPIC-${slug}-${Date.now().toString(36).slice(-5).toUpperCase()}`;
+    const write = async (rel: string, content: string) => {
+      const parts = rel.split('/'); let dir = this.dir;
+      for (let i = 0; i < parts.length - 1; i++) dir = await dir.getDirectoryHandle(parts[i], { create: true });
+      const fh = await dir.getFileHandle(parts[parts.length - 1], { create: true });
+      const w = await fh.createWritable(); await w.write(content); await w.close();
+    };
+    await write(`epics/${id}/epic.md`, `# ${title.trim()}\n\n${doc.trim()}\n`);
+    await write(`epics/${id}/epic.json`, JSON.stringify({ id, title: title.trim(), createdAt: new Date().toISOString(), stories: [] }, null, 2));
+    await write(`epics/${id}/decompose.flag`, new Date().toISOString());
+    return id;
+  }
+
   /** Authoritative board projection written by the engine (arbiter/lanes.json), or null. */
   async readLanesBoard(): Promise<{ generated: string; cards: unknown[] } | null> {
     try {
