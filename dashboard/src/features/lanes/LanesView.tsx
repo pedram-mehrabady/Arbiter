@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { useShallow } from 'zustand/react/shallow';
 import { DEFAULT_FLOW, type CardLifecycle, type LaneCard } from './flow';
@@ -28,6 +28,7 @@ export function LanesView() {
   const [newIdea, setNewIdea] = useState('');
   const [dragged, setDragged] = useState<LaneCard | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
+  const downPos = useRef<{ x: number; y: number } | null>(null);
 
   const onDropLane = (targetLaneId: string) => {
     const card = dragged;
@@ -125,7 +126,11 @@ export function LanesView() {
                             draggable
                             onDragStart={() => setDragged(card)}
                             onDragEnd={() => { setDragged(null); setDragOver(null); }}
-                            onClick={() => setOpenTask(card.taskId)}
+                            onPointerDown={(e) => { downPos.current = { x: e.clientX, y: e.clientY }; }}
+                            onPointerUp={(e) => {
+                              const d = downPos.current; downPos.current = null;
+                              if (d && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 5) setOpenTask(card.taskId);
+                            }}
                           >
                             <span className={css.cardId}>{card.taskId}</span>
                             <span className={`${css.badge} ${css['lc_' + card.lifecycle.replace('-', '_')]}`}>
