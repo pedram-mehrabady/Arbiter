@@ -8,6 +8,7 @@ import { ServerApi } from '../api/serverApi';
 import { createLLMAdapter } from '../api/llm';
 import type { PlanAnalysis, PlanItem, PlanStatus, CliMessage, ConductorSession, GateName } from '../api/types';
 import { synthesizeJobsFromBoard, activeExecPlanTickets, type ExecPlanFile } from '../lib/execPlan';
+import { DEFAULT_FLOW, deriveCards, type LaneCard, type TaskSnapshot } from '../features/lanes/flow';
 import { sendConductorMessage, createConductorSession } from '../api/conductor';
 
 interface AppStore {
@@ -37,6 +38,9 @@ interface AppStore {
   pendingEngineGates: EngineGate[];
   /** Approve/reject an engine gate — rewrites pending-gates.json so the Conductor continues. */
   resolveEngineGate: (gateId: string, decision: 'approved' | 'rejected') => Promise<void>;
+  /** Cards for the swim-lane board, derived from each task's state.json + pending gates. */
+  laneCards: LaneCard[];
+  loadLanes: () => Promise<void>;
   cliStats: CliStats | null;
   agentData: Record<string, AgentData>;
   messages: CliMessage[];
@@ -228,6 +232,32 @@ export const useAppStore = create<AppStore>()(
           get().showToast('Gate already resolved or not found', 4000);
         }
       },
+      laneCards: [],
+      loadLanes: async () => {
+        const { liveApi } = get();
+        if (!liveApi) return;
+        const api = liveApi as unknown as {
+          listTaskIds?: () => Promise<string[]>;
+          readTaskState?: (id: string) => Promise<{ sub_tasks?: Record<string, { agent_role: string; status: string }> } | null>;
+          readPendingGates?: () => Promise<Array<{ task_id: string; type: string; status: string }>>;
+        };
+        if (!api.listTaskIds || !api.readTaskState) return;
+        const ids = await api.listTaskIds();
+        const gates = (await api.readPendingGates?.() ?? []).filter(g => g.status === 'pending');
+        const gateByTask = new Map(gates.map(g => [g.task_id, g.type]));
+        const rank = (s: string) => (s === 'in_progress' ? 3 : s === 'failed' ? 2 : s === 'pending' ? 1 : 0);
+        const snapshots: TaskSnapshot[] = [];
+        for (const id of ids) {
+          const st = await api.readTaskState!(id);
+          const agentStatus: Record<string, string> = {};
+          for (const sub of Object.values(st?.sub_tasks ?? {})) {
+            const cur = agentStatus[sub.agent_role];
+            if (!cur || rank(sub.status) > rank(cur)) agentStatus[sub.agent_role] = sub.status;
+          }
+          snapshots.push({ taskId: id, title: id, agentStatus, pendingGateType: gateByTask.get(id) });
+        }
+        set({ laneCards: deriveCards(DEFAULT_FLOW, snapshots) });
+      },
       cliStats: null,
       agentData: {},
       messages: [],
@@ -357,7 +387,8 @@ export const useAppStore = create<AppStore>()(
       startPolling: () => {
         get().stopPolling();
         get().poll();
-        const id = setInterval(() => get().poll(), 5000);
+        void get().loadLanes();
+        const id = setInterval(() => { get().poll(); void get().loadLanes(); }, 5000);
         set({ _pollInterval: id });
       },
 

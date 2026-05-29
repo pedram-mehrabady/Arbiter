@@ -163,6 +163,17 @@ export class ServerApi {
     await serverWrite(relativePath, content, this.rootPath);
   }
 
+  async listTaskIds(): Promise<string[]> {
+    const entries = await serverLs('arbiter/tasks', this.rootPath);
+    return entries.filter(e => e.kind === 'directory').map(e => e.name);
+  }
+
+  async readTaskState(taskId: string): Promise<{ task_id: string; sub_tasks?: Record<string, { agent_role: string; status: string }> } | null> {
+    const raw = await serverRead(`arbiter/tasks/${taskId}/state.json`, this.rootPath);
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch { return null; }
+  }
+
   async readPendingGates(): Promise<EngineGate[]> {
     const raw = await serverRead('arbiter/pending-gates.json', this.rootPath);
     if (!raw) return [];

@@ -9,6 +9,7 @@ import { PipelineView } from './features/pipeline/PipelineView';
 import { ReportsView } from './features/reports/ReportsView';
 import { FlowView } from './features/flow/FlowView';
 import { BoardView } from './features/board/BoardView';
+import { LanesView } from './features/lanes/LanesView';
 import { PlanModal } from './features/arbiter/components/PlanModal';
 import { PlanReviewModal } from './features/arbiter/components/PlanReviewModal';
 import { ActionGateModal } from './features/arbiter/components/ActionGateModal';
@@ -20,10 +21,10 @@ import { useDeveloperActivity } from './hooks/useDeveloperActivity';
 import { getDeveloperName } from './lib/developer';
 import styles from './App.module.css';
 
-type MainTab = 'pipeline' | 'reports' | 'flow' | 'board';
+type MainTab = 'lanes' | 'pipeline' | 'reports' | 'flow' | 'board';
 
 export default function App() {
-  const [tab, setTab] = useState<MainTab>('pipeline');
+  const [tab, setTab] = useState<MainTab>('lanes');
   const [needsSetup, setNeedsSetup] = useState(() => getDeveloperName() === null);
   const [profileOpen, setProfileOpen] = useState(false);
 
@@ -93,6 +94,12 @@ export default function App() {
 
       <nav className={styles.tabNav}>
         <button
+          className={`${styles.tabBtn}${tab === 'lanes' ? ' ' + styles.tabBtnActive : ''}`}
+          onClick={() => setTab('lanes')}
+        >
+          Lanes
+        </button>
+        <button
           className={`${styles.tabBtn}${tab === 'pipeline' ? ' ' + styles.tabBtnActive : ''}`}
           onClick={() => setTab('pipeline')}
         >
@@ -135,6 +142,7 @@ export default function App() {
       )}
 
       <div className={styles.content}>
+        {tab === 'lanes'    && <LanesView />}
         {tab === 'pipeline' && <PipelineView />}
         {tab === 'reports'  && <ReportsView />}
         {tab === 'flow'     && <FlowView />}

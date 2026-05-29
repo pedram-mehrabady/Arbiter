@@ -20,6 +20,27 @@ export class LiveApi {
     } catch { return null; }
   }
 
+  // ── Per-task state (arbiter/tasks/<id>/state.json) ───────────────────────
+  async listTaskIds(): Promise<string[]> {
+    const ids: string[] = [];
+    try {
+      const tasksDir = await this.dir.getDirectoryHandle('tasks', { create: false });
+      for await (const [name, handle] of tasksDir as unknown as AsyncIterable<[string, FileSystemHandle]>) {
+        if (handle.kind === 'directory') ids.push(name);
+      }
+    } catch { /* no tasks dir yet */ }
+    return ids;
+  }
+
+  async readTaskState(taskId: string): Promise<{ task_id: string; sub_tasks?: Record<string, { agent_role: string; status: string }> } | null> {
+    try {
+      const tasksDir = await this.dir.getDirectoryHandle('tasks', { create: false });
+      const taskDir = await tasksDir.getDirectoryHandle(taskId, { create: false });
+      const fh = await taskDir.getFileHandle('state.json', { create: false });
+      return JSON.parse(await (await fh.getFile()).text());
+    } catch { return null; }
+  }
+
   // ── Engine human gates (arbiter/pending-gates.json) ──────────────────────
   async readPendingGates(): Promise<EngineGate[]> {
     try {
