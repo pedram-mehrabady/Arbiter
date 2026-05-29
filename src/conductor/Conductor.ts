@@ -1478,6 +1478,8 @@ export class Conductor {
     if (gateType === 'design_approval') return gates.design;
     if (gateType === 'plan_approval')   return gates.plan;
     if (gateType === 'review_approval') return gates.review;
+    // Opt-in: only fires when explicitly enabled (default off, so existing pipelines are unaffected).
+    if (gateType === 'frontend_review') return (gates as unknown as Record<string, boolean>).frontend_review === true;
     return true; // debugger_major_rewrite is always enabled
   }
 }

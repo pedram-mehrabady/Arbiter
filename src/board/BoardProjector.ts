@@ -19,7 +19,7 @@ export interface LaneCard { taskId: string; title: string; laneId: string; laneI
 export interface TaskSnapshot { taskId: string; title: string; agentStatus: Record<string, string>; pendingGate?: { type: string; subTask?: string; gateId?: string } }
 export interface BoardJson { generated: string; lanes: FlowLane[]; cards: LaneCard[] }
 
-const GATE_LANE: Record<string, string> = { design_approval: 'design', plan_approval: 'plan', review_approval: 'finalize', ui_approval: 'build' };
+const GATE_LANE: Record<string, string> = { design_approval: 'design', plan_approval: 'plan', frontend_review: 'build', review_approval: 'finalize', ui_approval: 'build' };
 
 /** Place one card per task at its frontier / gate / done. Mirrors the dashboard deriveCards. */
 export function deriveCards(flow: FlowLane[], tasks: TaskSnapshot[]): LaneCard[] {

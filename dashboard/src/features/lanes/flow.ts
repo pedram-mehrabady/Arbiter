@@ -80,6 +80,7 @@ export interface TaskSnapshot {
 const GATE_LANE: Record<string, string> = {
   design_approval: 'design',
   plan_approval: 'plan',
+  frontend_review: 'build',
   review_approval: 'finalize',
   ui_approval: 'build',
 };

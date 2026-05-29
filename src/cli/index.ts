@@ -859,6 +859,27 @@ syncCmd
   });
 
 // ── arbiter dashboard ─────────────────────────────────────────────────────────
+// ── arbiter preview ─────────────────────────────────────────────────────────
+program.command('preview <task-id>')
+  .description('Run a task\'s app (dev server) and expose its URL to the dashboard for live review')
+  .option('--dir <path>', 'Directory of the app to run (default: workspace root)')
+  .option('--workspace <path>', 'Workspace root (default: cwd)', process.cwd())
+  .action(async (taskId: string, opts: { dir?: string; workspace: string }) => {
+    const root = path.resolve(opts.workspace);
+    const appDir = opts.dir ? path.resolve(opts.dir) : root;
+    const previewPath = path.join(root, 'arbiter', 'tasks', taskId, 'preview.json');
+    const { startPreview } = await import('../preview/PreviewServer');
+    const handle = await startPreview(appDir, (m) => console.log(`[preview] ${m}`));
+    if (!handle) { console.error('No dev server to run.'); process.exit(1); }
+    await fs.mkdir(path.dirname(previewPath), { recursive: true });
+    await fs.writeFile(previewPath, JSON.stringify({ url: handle.url, port: handle.port, script: handle.script, startedAt: new Date().toISOString() }, null, 2));
+    console.log(`\n  ✓ Preview for ${taskId} → ${handle.url}\n  (open the task in the dashboard → Preview tab. Ctrl+C to stop.)`);
+    const cleanup = async () => { await handle.stop(); await fs.rm(previewPath, { force: true }).catch(() => {}); process.exit(0); };
+    process.on('SIGINT', cleanup);
+    process.on('SIGTERM', cleanup);
+    await new Promise(() => {}); // keep alive
+  });
+
 // ── arbiter factory ─────────────────────────────────────────────────────────
 program.command('factory')
   .description('Run the factory daemon — pick up ready tasks, run them through the pipeline, keep the board live')

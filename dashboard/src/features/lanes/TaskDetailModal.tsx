@@ -58,7 +58,10 @@ function LogView({ usage }: { usage: UsageRow[] }) {
 }
 
 export function TaskDetailModal({ taskId, subtitle, onClose }: Props) {
-  const { liveApi, settings } = useAppStore(useShallow((s) => ({ liveApi: s.liveApi, settings: s.settings })));
+  const { liveApi, settings, pendingEngineGates, resolveEngineGate } = useAppStore(useShallow((s) => ({
+    liveApi: s.liveApi, settings: s.settings, pendingEngineGates: s.pendingEngineGates, resolveEngineGate: s.resolveEngineGate,
+  })));
+  const taskGate = pendingEngineGates.find((g) => g.task_id === taskId);
   const api = liveApi as unknown as {
     readRepoFile?: (p: string) => Promise<string | null>;
     writeRepoFile?: (p: string, c: string) => Promise<void>;
@@ -67,8 +70,9 @@ export function TaskDetailModal({ taskId, subtitle, onClose }: Props) {
   } | null;
 
   const [docs, setDocs] = useState<Array<{ label: string; content: string }>>([]);
-  const [tab, setTab] = useState<string>('PRD');       // doc label, or 'LOG'
+  const [tab, setTab] = useState<string>('PRD');       // doc label, or 'LOG' / 'PREVIEW'
   const [usage, setUsage] = useState<UsageRow[]>([]);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [draft, setDraft] = useState('');
@@ -92,6 +96,9 @@ export function TaskDetailModal({ taskId, subtitle, onClose }: Props) {
         if (content) found.push({ label: a.label, content });
       }
       const u = api?.readUsageForTask ? await api.readUsageForTask(taskId) : [];
+      const previewRaw = api?.readRepoFile ? await api.readRepoFile(`arbiter/tasks/${taskId}/preview.json`) : null;
+      let pUrl: string | null = null;
+      if (previewRaw) { try { pUrl = (JSON.parse(previewRaw) as { url?: string }).url ?? null; } catch { /* none */ } }
       const chatRaw = api?.readRepoFile ? await api.readRepoFile(`arbiter/tasks/${taskId}/chat.jsonl`) : null;
       const chat: ChatMsg[] = chatRaw
         ? chatRaw.split('\n').filter(Boolean).map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean) as ChatMsg[]
@@ -99,6 +106,7 @@ export function TaskDetailModal({ taskId, subtitle, onClose }: Props) {
       if (alive) {
         setDocs(found);
         setUsage(u);
+        setPreviewUrl(pUrl);
         setMessages(chat);
         setTab(found[0]?.label ?? 'PRD');
         setLoading(false);
@@ -174,9 +182,31 @@ export function TaskDetailModal({ taskId, subtitle, onClose }: Props) {
                     <button key={d.label} className={`${css.docTab} ${tab === d.label ? css.docTabActive : ''}`} onClick={() => setTab(d.label)}>{d.label}</button>
                   ))}
                   <button className={`${css.docTab} ${tab === 'LOG' ? css.docTabActive : ''}`} onClick={() => setTab('LOG')}>📊 Log</button>
+                  <button className={`${css.docTab} ${tab === 'PREVIEW' ? css.docTabActive : ''}`} onClick={() => setTab('PREVIEW')}>🖥 Preview</button>
                 </div>
-                {tab === 'LOG'
-                  ? <LogView usage={usage} />
+                {tab === 'LOG' ? <LogView usage={usage} />
+                  : tab === 'PREVIEW' ? (
+                    previewUrl ? (
+                      <div className={css.previewWrap}>
+                        <div className={css.previewBar}>
+                          <span className={css.dimInline}>{previewUrl}</span>
+                          <a href={previewUrl} target="_blank" rel="noreferrer" className={css.previewOpen}>Open ↗</a>
+                          {taskGate && (
+                            <button className={css.previewAccept} onClick={() => { void resolveEngineGate(taskGate.gate_id, 'approved'); }}>
+                              ✓ Accept &amp; continue
+                            </button>
+                          )}
+                        </div>
+                        <iframe className={css.previewFrame} src={previewUrl} title="preview" />
+                      </div>
+                    ) : (
+                      <div className={css.dim}>
+                        No live preview running. Start one from the repo with:
+                        <pre className={css.docContent}>arbiter preview {taskId} --dir &lt;your app dir&gt;</pre>
+                        Then it appears here for review. (The factory will start it automatically at the frontend review gate when enabled.)
+                      </div>
+                    )
+                  )
                   : docs.length === 0
                     ? <div className={css.dim}>No artifacts yet — this task hasn’t produced any step outputs.</div>
                     : <pre className={css.docContent}>{activeDoc?.content}</pre>}
