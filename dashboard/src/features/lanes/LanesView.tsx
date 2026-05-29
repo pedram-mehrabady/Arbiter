@@ -13,13 +13,24 @@ const LIFECYCLE_LABEL: Record<CardLifecycle, string> = {
 };
 
 export function LanesView() {
-  const { laneCards, isConnected } = useAppStore(useShallow((s) => ({
+  const { laneCards, isConnected, createBrainstormTask } = useAppStore(useShallow((s) => ({
     laneCards: s.laneCards,
     isConnected: s.isConnected,
+    createBrainstormTask: s.createBrainstormTask,
   })));
 
   const [openTask, setOpenTask] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [creating, setCreating] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newIdea, setNewIdea] = useState('');
+
+  const submitIdea = async () => {
+    if (!newTitle.trim()) return;
+    const id = await createBrainstormTask(newTitle, newIdea || newTitle);
+    setNewTitle(''); setNewIdea(''); setCreating(false);
+    if (id) setOpenTask(id);
+  };
   const toggle = (id: string) =>
     setCollapsed((prev) => {
       const next = new Set(prev);
@@ -64,6 +75,23 @@ export function LanesView() {
                         {cards.length > 0 && <span className={css.colCount}>{cards.length}</span>}
                       </div>
                       <div className={css.cards}>
+                        {lane.id === 'brainstorm' && col.id === 'ideation' && (
+                          creating ? (
+                            <div className={css.createForm} onClick={(e) => e.stopPropagation()}>
+                              <input className={css.createInput} autoFocus placeholder="Idea title…" value={newTitle}
+                                onChange={(e) => setNewTitle(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Enter') void submitIdea(); if (e.key === 'Escape') setCreating(false); }} />
+                              <textarea className={css.createArea} placeholder="Describe the idea (optional)…" rows={3}
+                                value={newIdea} onChange={(e) => setNewIdea(e.target.value)} />
+                              <div className={css.createActions}>
+                                <button className={css.createBtn} onClick={() => void submitIdea()}>Start</button>
+                                <button className={css.cancelBtn} onClick={() => setCreating(false)}>Cancel</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button className={css.newIdea} onClick={() => setCreating(true)}>+ New idea</button>
+                          )
+                        )}
                         {cards.map((card) => (
                           <div key={card.taskId} className={css.card} onClick={() => setOpenTask(card.taskId)} role="button">
                             <span className={css.cardId}>{card.taskId}</span>

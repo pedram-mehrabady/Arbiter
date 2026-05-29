@@ -18,13 +18,23 @@ describe('deriveCards', () => {
     expect(cards[0]).toMatchObject({ laneId: 'build', columnId: 'frontend', lifecycle: 'running' });
   });
 
-  it('shows a pending gate as needs-gate in the gate lane', () => {
+  it('places a pending gate on its exact sub_task column, needs-gate (not Done)', () => {
     const cards = deriveCards(DEFAULT_FLOW, [{
       taskId: 'T3', title: 'T3',
-      agentStatus: { design: 'completed', 'design-critic': 'completed' },
-      pendingGateType: 'plan_approval',
+      agentStatus: { design: 'completed', 'design-critic': 'completed', reviewer: 'completed' },
+      pendingGate: { type: 'review_approval', subTask: 'reviewer' },
+    }]);
+    expect(cards[0]).toMatchObject({ laneId: 'finalize', columnId: 'reviewer', lifecycle: 'needs-gate' });
+  });
+
+  it('falls back to the gate lane (last agent column) when sub_task is unknown', () => {
+    const cards = deriveCards(DEFAULT_FLOW, [{
+      taskId: 'T3b', title: 'T3b',
+      agentStatus: { design: 'completed' },
+      pendingGate: { type: 'plan_approval' },
     }]);
     expect(cards[0]).toMatchObject({ laneId: 'plan', lifecycle: 'needs-gate' });
+    expect(cards[0].columnId).not.toBe('done');
   });
 
   it('queues a task whose first agent has not started', () => {

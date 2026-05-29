@@ -41,6 +41,8 @@ interface AppStore {
   /** Cards for the swim-lane board, derived from each task's state.json + pending gates. */
   laneCards: LaneCard[];
   loadLanes: () => Promise<void>;
+  /** Create a new task in the Brainstorm lane (writes task.md + an ideation state). */
+  createBrainstormTask: (title: string, idea: string) => Promise<string | null>;
   cliStats: CliStats | null;
   agentData: Record<string, AgentData>;
   messages: CliMessage[];
@@ -239,12 +241,12 @@ export const useAppStore = create<AppStore>()(
         const api = liveApi as unknown as {
           listTaskIds?: () => Promise<string[]>;
           readTaskState?: (id: string) => Promise<{ sub_tasks?: Record<string, { agent_role: string; status: string }> } | null>;
-          readPendingGates?: () => Promise<Array<{ task_id: string; type: string; status: string }>>;
+          readPendingGates?: () => Promise<Array<{ task_id: string; type: string; sub_task?: string; status: string }>>;
         };
         if (!api.listTaskIds || !api.readTaskState) return;
         const ids = await api.listTaskIds();
         const gates = (await api.readPendingGates?.() ?? []).filter(g => g.status === 'pending');
-        const gateByTask = new Map(gates.map(g => [g.task_id, g.type]));
+        const gateByTask = new Map(gates.map(g => [g.task_id, { type: g.type, subTask: g.sub_task }]));
         const rank = (s: string) => (s === 'in_progress' ? 3 : s === 'failed' ? 2 : s === 'pending' ? 1 : 0);
         const snapshots: TaskSnapshot[] = [];
         for (const id of ids) {
@@ -254,9 +256,32 @@ export const useAppStore = create<AppStore>()(
             const cur = agentStatus[sub.agent_role];
             if (!cur || rank(sub.status) > rank(cur)) agentStatus[sub.agent_role] = sub.status;
           }
-          snapshots.push({ taskId: id, title: id, agentStatus, pendingGateType: gateByTask.get(id) });
+          snapshots.push({ taskId: id, title: id, agentStatus, pendingGate: gateByTask.get(id) });
         }
         set({ laneCards: deriveCards(DEFAULT_FLOW, snapshots) });
+      },
+
+      createBrainstormTask: async (title, idea) => {
+        const { liveApi } = get();
+        if (!liveApi) { get().showToast('Connect a repo first'); return null; }
+        const api = liveApi as unknown as { writeRepoFile?: (p: string, c: string) => Promise<void> };
+        if (!api.writeRepoFile) { get().showToast('This connection cannot create tasks'); return null; }
+        const slug = title.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 20) || 'IDEA';
+        const stamp = Date.now().toString(36).slice(-5).toUpperCase();
+        const taskId = `${slug}-${stamp}`;
+        const md = `# ${title.trim()}\n\n${idea.trim()}\n`;
+        // A minimal state placing the task in the Brainstorm lane (ideation in progress).
+        const state = { task_id: taskId, phase: 'brainstorm', sub_tasks: { ideation: { agent_role: 'ideation', status: 'in_progress' } } };
+        try {
+          await api.writeRepoFile(`arbiter/tasks/${taskId}/task.md`, md);
+          await api.writeRepoFile(`arbiter/tasks/${taskId}/state.json`, JSON.stringify(state, null, 2));
+          await get().loadLanes();
+          get().showToast(`Started brainstorm: ${taskId}`);
+          return taskId;
+        } catch (e) {
+          get().showToast(`Could not create task: ${(e as Error).message}`, 5000);
+          return null;
+        }
       },
       cliStats: null,
       agentData: {},
