@@ -917,16 +917,24 @@ epicCmd.command('new <title>')
   });
 
 program.command('decompose <epicId>')
-  .description('Decompose an Epic into Stories + Tasks (heading-based)')
+  .description('Decompose an Epic into Stories + Tasks (smart LLM with --provider, else heading-based)')
+  .option('--provider <type>', 'LLM for smart decomposition: claude | mock (default: heading-based, no LLM)')
   .option('--workspace <path>', 'Workspace root', process.cwd())
-  .action(async (epicId: string, opts: { workspace: string }) => {
+  .action(async (epicId: string, opts: { provider?: string; workspace: string }) => {
     const root = path.resolve(opts.workspace);
     const { decompose } = await import('../epics/EpicStore');
     const { projectBoard } = await import('../board/BoardProjector');
-    const epic = await decompose(root, epicId);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let provider: any;
+    if (opts.provider === 'mock') provider = new (await import('../providers/MockProvider')).MockProvider();
+    else if (opts.provider) provider = new (await import('../providers/AnthropicProvider')).AnthropicProvider();
+    const invoke = provider
+      ? async (prompt: string) => { const r = await provider.invoke({ model: 'claude-opus-4-7', assembledPrompt: prompt, maxTokens: 8192, timeoutMs: 180_000, agentRole: 'decomposer' }); return r.ok ? r.value.content : ''; }
+      : undefined;
+    const epic = await decompose(root, epicId, { invoke });
     await projectBoard(root).catch(() => {});
     const tasks = epic.stories.reduce((n, s) => n + s.taskIds.length, 0);
-    console.log(`Decomposed ${epicId} → ${epic.stories.length} stories, ${tasks} tasks.`);
+    console.log(`Decomposed ${epicId} → ${epic.stories.length} stories, ${tasks} tasks${invoke ? ' (smart)' : ''}.`);
   });
 
 program.command('epics')
