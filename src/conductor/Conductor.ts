@@ -357,29 +357,86 @@ export class Conductor {
   }
 
   // ── Phase 04: Contract validation for Tier 3 tasks ───────────────────────
+  // Validate the Design agent's contract files. On failure, return the exact
+  // errors to the Design agent and retry ONCE (M3.1). If they still don't
+  // validate, emit `contracts_unresolved` instead of silently locking — the
+  // downstream Compiler Airlock would otherwise be the first to notice.
   private async runContractValidation(taskId: string, taskDir: string): Promise<void> {
     const validator = new ContractValidator();
-    const result = await validator.run(taskDir);
+    const MAX_ATTEMPTS = 2; // initial + one retry
 
-    if (result.passed) {
-      this.sqliteStore.upsertTask({ task_id: taskId, status: 'building' });
-      this.sqliteStore.appendEvent(taskId, 'contracts_locked', { locked: true });
-      await this.decisionLog.append({
-        task_id: taskId,
-        event: 'contracts_locked',
-        detail: 'All contract files validated and locked',
-      });
-    } else {
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const result = await validator.run(taskDir);
+
+      if (result.passed) {
+        this.sqliteStore.upsertTask({ task_id: taskId, status: 'building' });
+        this.sqliteStore.appendEvent(taskId, 'contracts_locked', { locked: true, attempt });
+        await this.decisionLog.append({
+          task_id: taskId,
+          event: 'contracts_locked',
+          detail: `All contract files validated and locked (attempt ${attempt})`,
+        });
+        return;
+      }
+
       const errorSummary = result.errors.map(e => `${e.file}: ${e.error}`).join('\n');
       this.sqliteStore.appendEvent(taskId, 'contract_validation_failed', {
+        attempt,
         errors: result.errors,
       });
       await this.decisionLog.append({
         task_id: taskId,
         event: 'contract_validation_failed',
-        detail: errorSummary.slice(0, 500),
+        detail: `attempt ${attempt}: ${errorSummary.slice(0, 480)}`,
       });
+
+      if (attempt < MAX_ATTEMPTS) {
+        await this.regenerateContractsViaDesign(taskId, taskDir, errorSummary).catch(() => {
+          /* re-dispatch is best-effort; the re-validation below is the source of truth */
+        });
+      }
     }
+
+    // Exhausted the retry — do NOT lock. Flag for the operator + audit trail.
+    this.sqliteStore.appendEvent(taskId, 'contracts_unresolved', {
+      reason: 'contract validation failed after one retry',
+    });
+    await this.decisionLog.append({
+      task_id: taskId,
+      event: 'contracts_unresolved',
+      detail: 'Tier 3 contracts did not validate after a Design re-dispatch — not locked',
+    });
+  }
+
+  /** Re-dispatch the Design agent with the exact contract errors so it can fix the files. */
+  private async regenerateContractsViaDesign(taskId: string, taskDir: string, errorSummary: string): Promise<void> {
+    if (!this.config) return;
+    const designModel = this.config.roles?.['design']?.model ?? 'claude-opus-4-7';
+    const rulesPath = path.join(this.options.workspaceRoot, 'agents', 'templates', 'design.md');
+    const rules = await fs.readFile(rulesPath, 'utf-8').catch(() => '');
+    const existingDesign = await fs.readFile(path.join(taskDir, 'design-output.md'), 'utf-8').catch(() => '');
+
+    const prompt = [
+      rules,
+      '',
+      '## Contract validation FAILED — fix the contract files',
+      'Regenerate ONLY the contract files (contracts/api.ts, contracts/events.ts,',
+      'contracts/schema.prisma) so they compile and validate. Fix exactly these errors:',
+      '',
+      errorSummary,
+      '',
+      '## Current design (for reference)',
+      existingDesign.slice(0, 4_000),
+    ].join('\n');
+
+    this.sqliteStore.appendEvent(taskId, 'contracts_regenerate_dispatched', {});
+    await this.provider.invoke({
+      model: designModel,
+      assembledPrompt: prompt,
+      maxTokens: 4096,
+      timeoutMs: 180_000,
+      agentRole: 'design',
+    });
   }
 
   // ── Phase 06: Webhook receiver ───────────────────────────────────────────
