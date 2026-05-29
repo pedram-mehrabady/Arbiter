@@ -26,6 +26,7 @@ export function LanesView() {
   const [creating, setCreating] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newIdea, setNewIdea] = useState('');
+  const [attachment, setAttachment] = useState<{ name: string; content: string } | null>(null);
   const [dragged, setDragged] = useState<LaneCard | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
   const downPos = useRef<{ x: number; y: number } | null>(null);
@@ -45,10 +46,17 @@ export function LanesView() {
     }
   };
 
+  const onPickFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try { setAttachment({ name: file.name, content: await file.text() }); }
+    catch { showToast('Could not read that file (text files only)', 4000); }
+  };
+
   const submitIdea = async () => {
     if (!newTitle.trim()) return;
-    const id = await createBrainstormTask(newTitle, newIdea || newTitle);
-    setNewTitle(''); setNewIdea(''); setCreating(false);
+    const id = await createBrainstormTask(newTitle, newIdea || newTitle, attachment ?? undefined);
+    setNewTitle(''); setNewIdea(''); setAttachment(null); setCreating(false);
     if (id) setOpenTask(id);
   };
   const toggle = (id: string) =>
@@ -109,6 +117,10 @@ export function LanesView() {
                                 onKeyDown={(e) => { if (e.key === 'Enter') void submitIdea(); if (e.key === 'Escape') setCreating(false); }} />
                               <textarea className={css.createArea} placeholder="Describe the idea (optional)…" rows={3}
                                 value={newIdea} onChange={(e) => setNewIdea(e.target.value)} />
+                              <label className={css.attachRow}>
+                                <input type="file" accept=".md,.txt,.json,.yaml,.yml,text/*" onChange={onPickFile} />
+                                {attachment ? `📎 ${attachment.name}` : '📎 Attach a doc (optional)'}
+                              </label>
                               <div className={css.createActions}>
                                 <button className={css.createBtn} onClick={() => void submitIdea()}>Start</button>
                                 <button className={css.cancelBtn} onClick={() => setCreating(false)}>Cancel</button>

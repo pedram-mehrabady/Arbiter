@@ -41,6 +41,22 @@ export class LiveApi {
     } catch { return null; }
   }
 
+  /** Attachments (initial docs) added to a task: arbiter/tasks/<id>/attachments/*. */
+  async listAttachments(taskId: string): Promise<Array<{ name: string; content: string }>> {
+    const out: Array<{ name: string; content: string }> = [];
+    try {
+      const tasksDir = await this.dir.getDirectoryHandle('tasks', { create: false });
+      const taskDir = await tasksDir.getDirectoryHandle(taskId, { create: false });
+      const att = await taskDir.getDirectoryHandle('attachments', { create: false });
+      for await (const [name, handle] of att as unknown as AsyncIterable<[string, FileSystemHandle]>) {
+        if (handle.kind === 'file') {
+          try { out.push({ name, content: await (await (handle as FileSystemFileHandle).getFile()).text() }); } catch { /* skip */ }
+        }
+      }
+    } catch { /* no attachments */ }
+    return out;
+  }
+
   /** Per-step usage rows for a task, from arbiter/usage.jsonl (what ran, tokens, context, cost, ts). */
   async readUsageForTask(taskId: string): Promise<Array<{ sub_task?: string; agent_role?: string; model?: string; input_tokens?: number; output_tokens?: number; context_tokens?: number; cost_usd?: number; ts?: string }>> {
     try {

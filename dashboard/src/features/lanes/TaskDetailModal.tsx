@@ -63,6 +63,7 @@ export function TaskDetailModal({ taskId, subtitle, onClose }: Props) {
     readRepoFile?: (p: string) => Promise<string | null>;
     writeRepoFile?: (p: string, c: string) => Promise<void>;
     readUsageForTask?: (id: string) => Promise<UsageRow[]>;
+    listAttachments?: (id: string) => Promise<Array<{ name: string; content: string }>>;
   } | null;
 
   const [docs, setDocs] = useState<Array<{ label: string; content: string }>>([]);
@@ -80,7 +81,13 @@ export function TaskDetailModal({ taskId, subtitle, onClose }: Props) {
     (async () => {
       setLoading(true);
       const found: Array<{ label: string; content: string }> = [];
+      // PRD first, then any attachments (initial docs), then step artifacts.
+      const prd = api?.readRepoFile ? await api.readRepoFile(`arbiter/tasks/${taskId}/task.md`) : null;
+      if (prd) found.push({ label: 'PRD', content: prd });
+      const attachments = api?.listAttachments ? await api.listAttachments(taskId) : [];
+      for (const at of attachments) found.push({ label: `📎 ${at.name}`, content: at.content });
       for (const a of ARTIFACTS) {
+        if (a.file === 'task.md') continue; // already added as PRD
         const content = api?.readRepoFile ? await api.readRepoFile(`arbiter/tasks/${taskId}/${a.file}`) : null;
         if (content) found.push({ label: a.label, content });
       }

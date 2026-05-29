@@ -41,8 +41,8 @@ interface AppStore {
   /** Cards for the swim-lane board, derived from each task's state.json + pending gates. */
   laneCards: LaneCard[];
   loadLanes: () => Promise<void>;
-  /** Create a new task in the Brainstorm lane (writes task.md + an ideation state). */
-  createBrainstormTask: (title: string, idea: string) => Promise<string | null>;
+  /** Create a new task in the Brainstorm lane (writes task.md + an ideation state, + optional attachment). */
+  createBrainstormTask: (title: string, idea: string, attachment?: { name: string; content: string }) => Promise<string | null>;
   cliStats: CliStats | null;
   agentData: Record<string, AgentData>;
   messages: CliMessage[];
@@ -261,7 +261,7 @@ export const useAppStore = create<AppStore>()(
         set({ laneCards: deriveCards(DEFAULT_FLOW, snapshots) });
       },
 
-      createBrainstormTask: async (title, idea) => {
+      createBrainstormTask: async (title, idea, attachment) => {
         const { liveApi } = get();
         if (!liveApi) { get().showToast('Connect a repo first'); return null; }
         const api = liveApi as unknown as { writeRepoFile?: (p: string, c: string) => Promise<void> };
@@ -275,6 +275,10 @@ export const useAppStore = create<AppStore>()(
         try {
           await api.writeRepoFile(`arbiter/tasks/${taskId}/task.md`, md);
           await api.writeRepoFile(`arbiter/tasks/${taskId}/state.json`, JSON.stringify(state, null, 2));
+          if (attachment && attachment.content) {
+            const safe = attachment.name.replace(/[^a-zA-Z0-9._-]+/g, '_') || 'attachment.md';
+            await api.writeRepoFile(`arbiter/tasks/${taskId}/attachments/${safe}`, attachment.content);
+          }
           await get().loadLanes();
           get().showToast(`Started brainstorm: ${taskId}`);
           return taskId;

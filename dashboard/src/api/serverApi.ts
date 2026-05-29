@@ -174,6 +174,18 @@ export class ServerApi {
     try { return JSON.parse(raw); } catch { return null; }
   }
 
+  async listAttachments(taskId: string): Promise<Array<{ name: string; content: string }>> {
+    const entries = await serverLs(`arbiter/tasks/${taskId}/attachments`, this.rootPath);
+    const out: Array<{ name: string; content: string }> = [];
+    for (const e of entries) {
+      if (e.kind === 'file') {
+        const content = await serverRead(`arbiter/tasks/${taskId}/attachments/${e.name}`, this.rootPath);
+        if (content != null) out.push({ name: e.name, content });
+      }
+    }
+    return out;
+  }
+
   async readUsageForTask(taskId: string): Promise<Array<{ sub_task?: string; agent_role?: string; model?: string; input_tokens?: number; output_tokens?: number; context_tokens?: number; cost_usd?: number; ts?: string }>> {
     const raw = await serverRead('arbiter/usage.jsonl', this.rootPath);
     if (!raw) return [];
