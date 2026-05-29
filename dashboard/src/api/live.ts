@@ -41,6 +41,16 @@ export class LiveApi {
     } catch { return null; }
   }
 
+  /** Per-step usage rows for a task, from arbiter/usage.jsonl (what ran, tokens, context, cost, ts). */
+  async readUsageForTask(taskId: string): Promise<Array<{ sub_task?: string; agent_role?: string; model?: string; input_tokens?: number; output_tokens?: number; context_tokens?: number; cost_usd?: number; ts?: string }>> {
+    try {
+      const fh = await this.dir.getFileHandle('usage.jsonl', { create: false });
+      const text = await (await fh.getFile()).text();
+      return text.split('\n').filter(Boolean).map(l => { try { return JSON.parse(l); } catch { return null; } })
+        .filter((r): r is NonNullable<typeof r> => !!r && r.task_id === taskId);
+    } catch { return []; }
+  }
+
   // ── Engine human gates (arbiter/pending-gates.json) ──────────────────────
   async readPendingGates(): Promise<EngineGate[]> {
     try {

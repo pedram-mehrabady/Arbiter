@@ -12,10 +12,56 @@ const ARTIFACTS: Array<{ label: string; file: string }> = [
   ...DEFAULT_FLOW.flatMap((l) => l.agents.map((a) => ({ label: a.label, file: `${a.id}-output.md` }))),
 ];
 
+type UsageRow = { agent_role?: string; model?: string; input_tokens?: number; output_tokens?: number; context_tokens?: number; cost_usd?: number; ts?: string };
+
+function fmtNum(n: number): string { return n.toLocaleString(); }
+function fmtDuration(ms: number): string {
+  if (ms <= 0) return '—';
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60); return `${m}m ${s % 60}s`;
+}
+
+function renderLog(usage: UsageRow[]) {
+  const sum = (f: (r: UsageRow) => number) => usage.reduce((a, r) => a + f(r), 0);
+  const totalTokens = sum(r => (r.input_tokens ?? 0) + (r.output_tokens ?? 0));
+  const totalCtx = sum(r => r.context_tokens ?? 0);
+  const totalCost = sum(r => r.cost_usd ?? 0);
+  const times = usage.map(r => (r.ts ? Date.parse(r.ts) : NaN)).filter(n => !Number.isNaN(n));
+  const duration = times.length >= 2 ? Math.max(...times) - Math.min(...times) : 0;
+  return (
+    <div className={css.log}>
+      <div className={css.logTotals}>
+        <span><strong>{usage.length}</strong> steps</span>
+        <span><strong>{fmtDuration(duration)}</strong> total</span>
+        <span><strong>{fmtNum(totalTokens)}</strong> tokens</span>
+        <span><strong>{fmtNum(totalCtx)}</strong> context</span>
+        <span><strong>${totalCost.toFixed(4)}</strong></span>
+      </div>
+      <table className={css.logTable}>
+        <thead><tr><th>Step</th><th>Model</th><th>Tokens</th><th>Context</th><th>Cost</th></tr></thead>
+        <tbody>
+          {usage.map((r, i) => (
+            <tr key={i}>
+              <td>{r.agent_role ?? '—'}</td>
+              <td className={css.logModel}>{(r.model ?? '').replace('claude-', '')}</td>
+              <td>{fmtNum((r.input_tokens ?? 0) + (r.output_tokens ?? 0))}</td>
+              <td>{fmtNum(r.context_tokens ?? 0)}</td>
+              <td>${(r.cost_usd ?? 0).toFixed(4)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function TaskDetailModal({ taskId, onClose }: Props) {
   const { liveApi, settings } = useAppStore((s) => ({ liveApi: s.liveApi, settings: s.settings }));
   const [docs, setDocs] = useState<Array<{ label: string; content: string }>>([]);
   const [activeDoc, setActiveDoc] = useState(0);
+  const [showLog, setShowLog] = useState(false);
+  const [usage, setUsage] = useState<Array<{ agent_role?: string; model?: string; input_tokens?: number; output_tokens?: number; context_tokens?: number; cost_usd?: number; ts?: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [draft, setDraft] = useState('');
@@ -26,13 +72,14 @@ export function TaskDetailModal({ taskId, onClose }: Props) {
     let alive = true;
     (async () => {
       setLoading(true);
-      const api = liveApi as unknown as { readRepoFile?: (p: string) => Promise<string | null> } | null;
+      const api = liveApi as unknown as { readRepoFile?: (p: string) => Promise<string | null>; readUsageForTask?: (id: string) => Promise<typeof usage> } | null;
       const found: Array<{ label: string; content: string }> = [];
       for (const a of ARTIFACTS) {
         const content = api?.readRepoFile ? await api.readRepoFile(`arbiter/tasks/${taskId}/${a.file}`) : null;
         if (content) found.push({ label: a.label, content });
       }
-      if (alive) { setDocs(found); setLoading(false); }
+      const u = api?.readUsageForTask ? await api.readUsageForTask(taskId) : [];
+      if (alive) { setDocs(found); setUsage(u); setLoading(false); }
     })();
     return () => { alive = false; };
   }, [taskId, liveApi]);
@@ -80,16 +127,19 @@ export function TaskDetailModal({ taskId, onClose }: Props) {
         </header>
         <div className={css.body}>
           <div className={css.docPane}>
-            {loading ? <div className={css.dim}>Loading artifacts…</div> : docs.length === 0 ? (
-              <div className={css.dim}>No artifacts yet for this task.</div>
-            ) : (
+            {loading ? <div className={css.dim}>Loading…</div> : (
               <>
                 <div className={css.tabs}>
                   {docs.map((d, i) => (
-                    <button key={d.label} className={`${css.docTab} ${i === activeDoc ? css.docTabActive : ''}`} onClick={() => setActiveDoc(i)}>{d.label}</button>
+                    <button key={d.label} className={`${css.docTab} ${!showLog && i === activeDoc ? css.docTabActive : ''}`} onClick={() => { setShowLog(false); setActiveDoc(i); }}>{d.label}</button>
                   ))}
+                  {usage.length > 0 && (
+                    <button className={`${css.docTab} ${showLog ? css.docTabActive : ''}`} onClick={() => setShowLog(true)}>📊 Log</button>
+                  )}
                 </div>
-                <pre className={css.docContent}>{docs[activeDoc]?.content}</pre>
+                {showLog ? renderLog(usage) : docs.length === 0
+                  ? <div className={css.dim}>No artifacts yet for this task.</div>
+                  : <pre className={css.docContent}>{docs[activeDoc]?.content}</pre>}
               </>
             )}
           </div>

@@ -174,6 +174,13 @@ export class ServerApi {
     try { return JSON.parse(raw); } catch { return null; }
   }
 
+  async readUsageForTask(taskId: string): Promise<Array<{ sub_task?: string; agent_role?: string; model?: string; input_tokens?: number; output_tokens?: number; context_tokens?: number; cost_usd?: number; ts?: string }>> {
+    const raw = await serverRead('arbiter/usage.jsonl', this.rootPath);
+    if (!raw) return [];
+    return raw.split('\n').filter(Boolean).map(l => { try { return JSON.parse(l); } catch { return null; } })
+      .filter((r): r is { task_id: string } & Record<string, unknown> => !!r && (r as { task_id?: string }).task_id === taskId) as never;
+  }
+
   async readPendingGates(): Promise<EngineGate[]> {
     const raw = await serverRead('arbiter/pending-gates.json', this.rootPath);
     if (!raw) return [];
