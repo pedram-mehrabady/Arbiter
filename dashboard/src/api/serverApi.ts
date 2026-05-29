@@ -163,6 +163,12 @@ export class ServerApi {
     await serverWrite(relativePath, content, this.rootPath);
   }
 
+  async readLanesBoard(): Promise<{ generated: string; cards: unknown[] } | null> {
+    const raw = await serverRead('arbiter/lanes.json', this.rootPath);
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch { return null; }
+  }
+
   async listTaskIds(): Promise<string[]> {
     const entries = await serverLs('arbiter/tasks', this.rootPath);
     return entries.filter(e => e.kind === 'directory').map(e => e.name);

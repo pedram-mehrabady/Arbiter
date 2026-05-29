@@ -167,6 +167,7 @@ export class Conductor {
         profile,
         status: 'building',
       });
+      await this.refreshBoard(); // task now visible on the board with its tier
       this.sqliteStore.appendEvent(taskId, 'triage_complete', {
         tier: taskTier,
         profile,
@@ -277,6 +278,14 @@ export class Conductor {
         bundlePath: loopResult.value?.bundlePath,
       },
     };
+  }
+
+  /** Re-project arbiter/board.json so the dashboard reflects live progress. Best-effort. */
+  private async refreshBoard(): Promise<void> {
+    try {
+      const { projectBoard } = await import('../board/BoardProjector');
+      await projectBoard(this.options.workspaceRoot);
+    } catch { /* board projection is best-effort */ }
   }
 
   /** Write arbiter/tasks/<id>/report.md (duration, tokens, context, cost, PR, bundle) + copy the bundle in. */
@@ -736,6 +745,7 @@ export class Conductor {
       await Promise.all(batch.map(([subTaskId, entry]) =>
         this.runSubTask(state.task_id, subTaskId, entry, state),
       ));
+      await this.refreshBoard(); // keep board.json live as agents complete
     }
 
     return { ok: true, value: {} };

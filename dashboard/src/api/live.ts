@@ -20,6 +20,14 @@ export class LiveApi {
     } catch { return null; }
   }
 
+  /** Authoritative board projection written by the engine (arbiter/lanes.json), or null. */
+  async readLanesBoard(): Promise<{ generated: string; cards: unknown[] } | null> {
+    try {
+      const fh = await this.dir.getFileHandle('lanes.json', { create: false });
+      return JSON.parse(await (await fh.getFile()).text());
+    } catch { return null; }
+  }
+
   // ── Per-task state (arbiter/tasks/<id>/state.json) ───────────────────────
   async listTaskIds(): Promise<string[]> {
     const ids: string[] = [];

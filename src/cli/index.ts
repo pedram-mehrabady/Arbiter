@@ -859,6 +859,16 @@ syncCmd
   });
 
 // ── arbiter dashboard ─────────────────────────────────────────────────────────
+// ── arbiter board ──────────────────────────────────────────────────────────
+program.command('board')
+  .description('Project current task states into arbiter/board.json (authoritative board for the dashboard)')
+  .option('--workspace <path>', 'Workspace root (default: cwd)', process.cwd())
+  .action(async (opts: { workspace: string }) => {
+    const { projectBoard } = await import('../board/BoardProjector');
+    const board = await projectBoard(path.resolve(opts.workspace));
+    console.log(`Wrote arbiter/lanes.json — ${board.cards.length} card(s) across ${board.lanes.length} lanes.`);
+  });
+
 program.command('dashboard')
   .description('Start the Arbiter dashboard')
   .option('--port <port>', 'Port to serve on', '3070')

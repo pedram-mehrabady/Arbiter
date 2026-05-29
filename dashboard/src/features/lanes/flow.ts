@@ -24,7 +24,7 @@ export interface FlowLane {
 export const DEFAULT_FLOW: FlowLane[] = [
   {
     id: 'brainstorm', title: 'Brainstorm', enter: 'manual',
-    agents: [{ id: 'ideation', label: 'Ideation' }],
+    agents: [{ id: 'ideation', label: 'Ideation' }, { id: 'reframe', label: 'Reframe' }, { id: 'research', label: 'Research' }],
   },
   {
     id: 'design', title: 'Design & Critic', enter: 'manual', gateBeforeExit: true,

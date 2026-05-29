@@ -242,7 +242,14 @@ export const useAppStore = create<AppStore>()(
           listTaskIds?: () => Promise<string[]>;
           readTaskState?: (id: string) => Promise<{ sub_tasks?: Record<string, { agent_role: string; status: string }> } | null>;
           readPendingGates?: () => Promise<Array<{ gate_id: string; task_id: string; type: string; sub_task?: string; status: string }>>;
+          readLanesBoard?: () => Promise<{ cards: LaneCard[] } | null>;
         };
+        // Prefer the engine's authoritative projection (arbiter/lanes.json) when present.
+        const projected = api.readLanesBoard ? await api.readLanesBoard() : null;
+        if (projected && Array.isArray(projected.cards)) {
+          set({ laneCards: projected.cards });
+          return;
+        }
         if (!api.listTaskIds || !api.readTaskState) return;
         const ids = await api.listTaskIds();
         const gates = (await api.readPendingGates?.() ?? []).filter(g => g.status === 'pending');
