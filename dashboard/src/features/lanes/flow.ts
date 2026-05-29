@@ -67,6 +67,9 @@ export interface LaneCard {
   gateId?: string;
   /** push/PR/CI status label (engine projection only): 'PR open' | 'CI ✓' | 'CI ✗' | 'debugging' | 're-pushed' | 'merged'. */
   pushCi?: string;
+  /** Epic/Story this task belongs to (from the engine projection's meta.json read). */
+  epicId?: string;
+  storyId?: string;
 }
 
 export interface TaskSnapshot {

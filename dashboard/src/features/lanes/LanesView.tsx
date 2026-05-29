@@ -13,8 +13,9 @@ const LIFECYCLE_LABEL: Record<CardLifecycle, string> = {
 };
 
 export function LanesView() {
-  const { laneCards, isConnected, createBrainstormTask, resolveEngineGate, promoteTask, showToast } = useAppStore(useShallow((s) => ({
+  const { laneCards, epics, isConnected, createBrainstormTask, resolveEngineGate, promoteTask, showToast } = useAppStore(useShallow((s) => ({
     laneCards: s.laneCards,
+    epics: s.epics,
     isConnected: s.isConnected,
     createBrainstormTask: s.createBrainstormTask,
     resolveEngineGate: s.resolveEngineGate,
@@ -22,6 +23,8 @@ export function LanesView() {
     showToast: s.showToast,
   })));
 
+  const [epicFilter, setEpicFilter] = useState<string>('all');
+  const [storyFilter, setStoryFilter] = useState<string>('all');
   const [openTask, setOpenTask] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [creating, setCreating] = useState(false);
@@ -67,8 +70,14 @@ export function LanesView() {
       return next;
     });
 
+  const matchesFilter = (c: LaneCard): boolean =>
+    (epicFilter === 'all' || c.epicId === epicFilter) &&
+    (storyFilter === 'all' || c.storyId === storyFilter);
+  const visible = laneCards.filter(matchesFilter);
   const cardsAt = (laneId: string, columnId: string): LaneCard[] =>
-    laneCards.filter((c) => c.laneId === laneId && c.columnId === columnId);
+    visible.filter((c) => c.laneId === laneId && c.columnId === columnId);
+
+  const selectedEpic = epics.find((e) => e.id === epicFilter);
 
   return (
     <div className={css.board}>
@@ -76,9 +85,29 @@ export function LanesView() {
         <div className={css.hint}>Connect a repo to populate the lanes. The structure below is your pipeline; cards appear as tasks move through it.</div>
       )}
 
+      {epics.length > 0 && (
+        <div className={css.filterBar}>
+          <label className={css.filterLabel}>Epic</label>
+          <select className={css.filterSelect} value={epicFilter} onChange={(e) => { setEpicFilter(e.target.value); setStoryFilter('all'); }}>
+            <option value="all">All epics</option>
+            {epics.map((e) => <option key={e.id} value={e.id}>{e.title} ({e.done}/{e.total})</option>)}
+          </select>
+          {selectedEpic && (
+            <>
+              <label className={css.filterLabel}>Story</label>
+              <select className={css.filterSelect} value={storyFilter} onChange={(e) => setStoryFilter(e.target.value)}>
+                <option value="all">All stories</option>
+                {selectedEpic.stories.map((s) => <option key={s.id} value={s.id}>{s.title} ({s.done}/{s.total})</option>)}
+              </select>
+            </>
+          )}
+          <span className={css.filterCount}>{visible.length} task{visible.length === 1 ? '' : 's'} shown</span>
+        </div>
+      )}
+
       {DEFAULT_FLOW.map((lane) => {
         const isCollapsed = collapsed.has(lane.id);
-        const laneCount = laneCards.filter((c) => c.laneId === lane.id).length;
+        const laneCount = visible.filter((c) => c.laneId === lane.id).length;
         const columns = [...lane.agents.map((a) => ({ id: a.id, label: a.label })), { id: 'done', label: 'Done' }];
         return (
           <section
