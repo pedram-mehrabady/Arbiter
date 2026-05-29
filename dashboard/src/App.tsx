@@ -10,6 +10,7 @@ import { ReportsView } from './features/reports/ReportsView';
 import { FlowView } from './features/flow/FlowView';
 import { BoardView } from './features/board/BoardView';
 import { LanesView } from './features/lanes/LanesView';
+import { EpicsView } from './features/lanes/EpicsView';
 import { PlanModal } from './features/arbiter/components/PlanModal';
 import { PlanReviewModal } from './features/arbiter/components/PlanReviewModal';
 import { ActionGateModal } from './features/arbiter/components/ActionGateModal';
@@ -21,7 +22,7 @@ import { useDeveloperActivity } from './hooks/useDeveloperActivity';
 import { getDeveloperName } from './lib/developer';
 import styles from './App.module.css';
 
-type MainTab = 'lanes' | 'pipeline' | 'reports' | 'flow' | 'board';
+type MainTab = 'epics' | 'lanes' | 'pipeline' | 'reports' | 'flow' | 'board';
 
 export default function App() {
   const [tab, setTab] = useState<MainTab>('lanes');
@@ -94,6 +95,12 @@ export default function App() {
 
       <nav className={styles.tabNav}>
         <button
+          className={`${styles.tabBtn}${tab === 'epics' ? ' ' + styles.tabBtnActive : ''}`}
+          onClick={() => setTab('epics')}
+        >
+          Epics
+        </button>
+        <button
           className={`${styles.tabBtn}${tab === 'lanes' ? ' ' + styles.tabBtnActive : ''}`}
           onClick={() => setTab('lanes')}
         >
@@ -142,6 +149,7 @@ export default function App() {
       )}
 
       <div className={styles.content}>
+        {tab === 'epics'    && <EpicsView />}
         {tab === 'lanes'    && <LanesView />}
         {tab === 'pipeline' && <PipelineView />}
         {tab === 'reports'  && <ReportsView />}

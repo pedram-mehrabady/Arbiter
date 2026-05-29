@@ -46,6 +46,7 @@ export class FactoryDaemon {
 
   async tick(): Promise<void> {
     const root = this.opts.workspaceRoot;
+    await this.runDecompositions(root);
     await projectBoard(root).catch(() => {});
 
     let ids: string[] = [];
@@ -79,6 +80,25 @@ export class FactoryDaemon {
       if (this.running.size >= this.opts.maxTasks) continue;
 
       void this.run(id, subs);
+    }
+  }
+
+  /** Decompose any Epic flagged by the dashboard (arbiter/epics/<id>/decompose.flag). */
+  private async runDecompositions(root: string): Promise<void> {
+    let epicIds: string[] = [];
+    try {
+      epicIds = (await fs.readdir(path.join(root, 'arbiter', 'epics'), { withFileTypes: true }))
+        .filter(d => d.isDirectory()).map(d => d.name);
+    } catch { return; }
+    for (const id of epicIds) {
+      const flag = path.join(root, 'arbiter', 'epics', id, 'decompose.flag');
+      if (!(await fileExists(flag))) continue;
+      try {
+        const { decompose } = await import('../epics/EpicStore');
+        const epic = await decompose(root, id);
+        await fs.rm(flag, { force: true });
+        this.log(`decomposed ${id} → ${epic.stories.length} stories`);
+      } catch (e) { this.log(`decompose ${id} failed: ${String(e)}`); }
     }
   }
 

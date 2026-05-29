@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { ArbiterState, AppSettings, CliStats, AgentData, TabKey, WidgetId, ArbiterConfig, AgentsConfig, EngineGate } from '../api/types';
+import type { ArbiterState, AppSettings, CliStats, AgentData, TabKey, WidgetId, ArbiterConfig, AgentsConfig, EngineGate, EpicRollup } from '../api/types';
 import { DEFAULT_SETTINGS, DEFAULT_WIDGET_ORDER, DEFAULT_WIDGET_SIZES, DEFAULT_ARBITER_CONFIG } from '../api/types';
 import { LiveApi, connectRepo } from '../api/live';
 import { saveRepoHandles, loadRepoHandles, queryHandlePermission, requestHandlePermission } from '../lib/handleStore';
@@ -45,6 +45,11 @@ interface AppStore {
   createBrainstormTask: (title: string, idea: string, attachment?: { name: string; content: string }) => Promise<string | null>;
   /** Promote a brainstorm idea into the pipeline (writes promote.flag for the factory daemon). */
   promoteTask: (taskId: string) => Promise<void>;
+  /** Epic → Story rollup (from arbiter/epics.json). */
+  epics: EpicRollup[];
+  loadEpics: () => Promise<void>;
+  /** Create an Epic from a brief; the daemon decomposes it into Stories + Tasks. */
+  createEpic: (title: string, doc: string) => Promise<string | null>;
   cliStats: CliStats | null;
   agentData: Record<string, AgentData>;
   messages: CliMessage[];
@@ -296,6 +301,24 @@ export const useAppStore = create<AppStore>()(
           return null;
         }
       },
+      epics: [],
+      loadEpics: async () => {
+        const { liveApi } = get();
+        const api = liveApi as unknown as { readEpics?: () => Promise<EpicRollup[]> } | null;
+        if (!api?.readEpics) return;
+        try { set({ epics: await api.readEpics() }); } catch { /* none */ }
+      },
+      createEpic: async (title, doc) => {
+        const { liveApi } = get();
+        const api = liveApi as unknown as { createEpic?: (t: string, d: string) => Promise<string> } | null;
+        if (!api?.createEpic) { get().showToast('Connect a repo first'); return null; }
+        try {
+          const id = await api.createEpic(title, doc);
+          get().showToast(`Created ${id} — the factory will decompose it`);
+          await get().loadEpics();
+          return id;
+        } catch (e) { get().showToast(`Could not create epic: ${(e as Error).message}`, 5000); return null; }
+      },
       promoteTask: async (taskId) => {
         const { liveApi } = get();
         const api = liveApi as unknown as { writeRepoFile?: (p: string, c: string) => Promise<void> } | null;
@@ -438,7 +461,8 @@ export const useAppStore = create<AppStore>()(
         get().stopPolling();
         get().poll();
         void get().loadLanes();
-        const id = setInterval(() => { get().poll(); void get().loadLanes(); }, 5000);
+        void get().loadEpics();
+        const id = setInterval(() => { get().poll(); void get().loadLanes(); void get().loadEpics(); }, 5000);
         set({ _pollInterval: id });
       },
 

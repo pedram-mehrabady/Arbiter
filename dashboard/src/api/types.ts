@@ -367,6 +367,9 @@ export type CriticalPathFlag = {
  * (ConductorGate) model. Resolving one (status pending→approved/rejected) unblocks
  * the running Conductor.
  */
+export interface StoryRollup { id: string; title: string; total: number; done: number; pct: number }
+export interface EpicRollup { id: string; title: string; total: number; done: number; pct: number; stories: StoryRollup[] }
+
 export interface EngineGate {
   gate_id: string;
   type: string;

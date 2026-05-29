@@ -902,6 +902,46 @@ program.command('factory')
     if (opts.once) await daemon.tick(); else await daemon.watch();
   });
 
+// ── arbiter epic / decompose / epics ────────────────────────────────────────
+const epicCmd = program.command('epic').description('Epic (big idea) management');
+epicCmd.command('new <title>')
+  .description('Create an Epic from a brief (the general idea)')
+  .option('--doc <file>', 'Path to the brief markdown (the 20-page idea)')
+  .option('--workspace <path>', 'Workspace root', process.cwd())
+  .action(async (title: string, opts: { doc?: string; workspace: string }) => {
+    const root = path.resolve(opts.workspace);
+    const doc = opts.doc ? await fs.readFile(path.resolve(opts.doc), 'utf-8') : '';
+    const { createEpic } = await import('../epics/EpicStore');
+    const id = await createEpic(root, title, doc);
+    console.log(`Created ${id}. Decompose it with: arbiter decompose ${id}`);
+  });
+
+program.command('decompose <epicId>')
+  .description('Decompose an Epic into Stories + Tasks (heading-based)')
+  .option('--workspace <path>', 'Workspace root', process.cwd())
+  .action(async (epicId: string, opts: { workspace: string }) => {
+    const root = path.resolve(opts.workspace);
+    const { decompose } = await import('../epics/EpicStore');
+    const { projectBoard } = await import('../board/BoardProjector');
+    const epic = await decompose(root, epicId);
+    await projectBoard(root).catch(() => {});
+    const tasks = epic.stories.reduce((n, s) => n + s.taskIds.length, 0);
+    console.log(`Decomposed ${epicId} → ${epic.stories.length} stories, ${tasks} tasks.`);
+  });
+
+program.command('epics')
+  .description('List Epics with Story/Task progress rollup')
+  .option('--workspace <path>', 'Workspace root', process.cwd())
+  .action(async (opts: { workspace: string }) => {
+    const { listEpics } = await import('../epics/EpicStore');
+    const epics = await listEpics(path.resolve(opts.workspace));
+    if (!epics.length) { console.log('No epics yet.'); return; }
+    for (const e of epics) {
+      console.log(`\n${e.id} — ${e.title}  [${e.done}/${e.total} tasks · ${e.pct}%]`);
+      for (const s of e.stories) console.log(`  • ${s.title}  (${s.done}/${s.total} · ${s.pct}%)`);
+    }
+  });
+
 // ── arbiter board ──────────────────────────────────────────────────────────
 program.command('board')
   .description('Project current task states into arbiter/board.json (authoritative board for the dashboard)')
