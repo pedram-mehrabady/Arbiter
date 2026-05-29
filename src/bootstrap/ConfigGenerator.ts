@@ -127,6 +127,7 @@ export async function generateConfig(
 const ARBITER_GITIGNORE_BLOCK = `
 # Arbiter runtime — do not commit
 arbiter/state.json
+arbiter/state.db
 arbiter/decision-log.jsonl
 arbiter/receipts.jsonl
 arbiter/usage.jsonl
@@ -135,6 +136,8 @@ arbiter/evidence-cache.json
 arbiter/bundles/
 arbiter/signing-key.pem
 arbiter/signing-key-pub.pem
+# Personal developer identity (per-project, written by the dashboard) — never commit
+arbiter/developer-identity.json
 # Keep the directory marker and task outputs
 !arbiter/.gitkeep
 `;
@@ -143,8 +146,16 @@ async function appendGitignore(workspaceRoot: string): Promise<void> {
   const gitignorePath = path.join(workspaceRoot, '.gitignore');
   let existing = '';
   try { existing = await fs.readFile(gitignorePath, 'utf-8'); } catch { /* will create it */ }
-  if (existing.includes('arbiter/state.json')) return;
-  await fs.writeFile(gitignorePath, existing + ARBITER_GITIGNORE_BLOCK, 'utf-8');
+
+  let out = existing;
+  if (!existing.includes('arbiter/state.json')) {
+    out += ARBITER_GITIGNORE_BLOCK;
+  } else if (!existing.includes('arbiter/developer-identity.json')) {
+    // Top up an older block that predates the identity entry.
+    out += '\n# Personal developer identity (per-project) — never commit\narbiter/developer-identity.json\n';
+  }
+  if (out === existing) return;
+  await fs.writeFile(gitignorePath, out, 'utf-8');
 }
 
 function buildMasterDirectives(answers: InterviewAnswers): string {
