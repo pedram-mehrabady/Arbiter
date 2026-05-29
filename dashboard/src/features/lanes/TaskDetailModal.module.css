@@ -1,0 +1,42 @@
+.overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.45);
+  display: flex; align-items: center; justify-content: center; z-index: 1000;
+}
+.subtitle { font-size: 11px; color: var(--muted); margin-left: 2px; }
+.chatHead { padding: 8px 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); border-bottom: 1px solid var(--border, #eef0f3); }
+.modal {
+  width: min(1100px, 94vw); height: min(720px, 90vh);
+  background: var(--panel, #fff); border-radius: 12px; overflow: hidden;
+  display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,.3);
+}
+.head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px; border-bottom: 1px solid var(--border, #e5e7eb);
+}
+.head h3 { margin: 0; font-size: 15px; font-weight: 800; }
+.close { border: none; background: transparent; font-size: 16px; cursor: pointer; color: var(--muted); }
+.body { display: flex; flex: 1; min-height: 0; }
+
+.docPane { flex: 1.4; display: flex; flex-direction: column; min-width: 0; border-right: 1px solid var(--border, #eef0f3); }
+.tabs { display: flex; gap: 4px; padding: 8px; overflow-x: auto; border-bottom: 1px solid var(--border, #eef0f3); }
+.docTab { border: none; background: var(--bg, #f3f4f6); border-radius: 6px; padding: 5px 10px; font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap; color: var(--muted); }
+.docTabActive { background: var(--accent); color: #fff; }
+.docContent { flex: 1; margin: 0; padding: 14px; overflow: auto; font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, monospace; }
+
+.log { flex: 1; overflow: auto; padding: 12px 14px; }
+.logTotals { display: flex; flex-wrap: wrap; gap: 14px; padding: 10px 12px; margin-bottom: 12px; background: var(--bg, #f3f4f6); border-radius: 8px; font-size: 12px; color: var(--muted); }
+.logTotals strong { color: var(--text); font-size: 14px; }
+.logTable { width: 100%; border-collapse: collapse; font-size: 12px; }
+.logTable th { text-align: left; color: var(--muted); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--border, #e5e7eb); text-transform: uppercase; font-size: 10px; letter-spacing: .03em; }
+.logTable td { padding: 6px 8px; border-bottom: 1px solid var(--border, #f1f3f5); }
+.logModel { color: var(--muted); }
+
+.chatPane { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.chatLog { flex: 1; overflow: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.userMsg { align-self: flex-end; background: var(--accent); color: #fff; padding: 7px 11px; border-radius: 10px 10px 2px 10px; font-size: 13px; max-width: 85%; white-space: pre-wrap; }
+.aiMsg { align-self: flex-start; background: var(--bg, #f3f4f6); color: var(--text); padding: 7px 11px; border-radius: 10px 10px 10px 2px; font-size: 13px; max-width: 85%; white-space: pre-wrap; }
+.dim { color: var(--muted); font-size: 13px; padding: 8px; }
+.chatInput { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--border, #eef0f3); }
+.chatInput textarea { flex: 1; resize: none; border: 1px solid var(--border, #d1d5db); border-radius: 8px; padding: 8px; font: inherit; font-size: 13px; }
+.chatInput button { background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 0 16px; font-weight: 600; cursor: pointer; }
+.chatInput button:disabled { opacity: .5; cursor: default; }

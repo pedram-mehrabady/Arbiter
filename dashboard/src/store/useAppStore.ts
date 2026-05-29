@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { ArbiterState, AppSettings, CliStats, AgentData, TabKey, WidgetId, ArbiterConfig, AgentsConfig } from '../api/types';
+import type { ArbiterState, AppSettings, CliStats, AgentData, TabKey, WidgetId, ArbiterConfig, AgentsConfig, EngineGate } from '../api/types';
 import { DEFAULT_SETTINGS, DEFAULT_WIDGET_ORDER, DEFAULT_WIDGET_SIZES, DEFAULT_ARBITER_CONFIG } from '../api/types';
 import { LiveApi, connectRepo } from '../api/live';
 import { saveRepoHandles, loadRepoHandles, queryHandlePermission, requestHandlePermission } from '../lib/handleStore';
@@ -8,6 +8,7 @@ import { ServerApi } from '../api/serverApi';
 import { createLLMAdapter } from '../api/llm';
 import type { PlanAnalysis, PlanItem, PlanStatus, CliMessage, ConductorSession, GateName } from '../api/types';
 import { synthesizeJobsFromBoard, activeExecPlanTickets, type ExecPlanFile } from '../lib/execPlan';
+import { DEFAULT_FLOW, deriveCards, type LaneCard, type TaskSnapshot } from '../features/lanes/flow';
 import { sendConductorMessage, createConductorSession } from '../api/conductor';
 
 interface AppStore {
@@ -33,6 +34,15 @@ interface AppStore {
 
   // ── Arbiter state ─────────────────────────────────────────
   arbiterState: ArbiterState;
+  /** Human gates from the engine's pending-gates.json (what a `conduct` run actually waits on). */
+  pendingEngineGates: EngineGate[];
+  /** Approve/reject an engine gate — rewrites pending-gates.json so the Conductor continues. */
+  resolveEngineGate: (gateId: string, decision: 'approved' | 'rejected') => Promise<void>;
+  /** Cards for the swim-lane board, derived from each task's state.json + pending gates. */
+  laneCards: LaneCard[];
+  loadLanes: () => Promise<void>;
+  /** Create a new task in the Brainstorm lane (writes task.md + an ideation state). */
+  createBrainstormTask: (title: string, idea: string) => Promise<string | null>;
   cliStats: CliStats | null;
   agentData: Record<string, AgentData>;
   messages: CliMessage[];
@@ -210,6 +220,69 @@ export const useAppStore = create<AppStore>()(
 
       // ── Arbiter state ────────────────────────────────────
       arbiterState: { jobs: [] },
+      pendingEngineGates: [],
+      resolveEngineGate: async (gateId, decision) => {
+        const { liveApi } = get();
+        if (!liveApi) { get().showToast('Connect the repo first'); return; }
+        const api = liveApi as unknown as { resolveGate?: (id: string, d: 'approved' | 'rejected') => Promise<boolean> };
+        const ok = api.resolveGate ? await api.resolveGate(gateId, decision) : false;
+        if (ok) {
+          // Optimistically drop it from the list; the next poll reconciles.
+          set((s) => ({ pendingEngineGates: s.pendingEngineGates.filter((g) => g.gate_id !== gateId) }));
+          get().showToast(`Gate ${decision}`);
+        } else {
+          get().showToast('Gate already resolved or not found', 4000);
+        }
+      },
+      laneCards: [],
+      loadLanes: async () => {
+        const { liveApi } = get();
+        if (!liveApi) return;
+        const api = liveApi as unknown as {
+          listTaskIds?: () => Promise<string[]>;
+          readTaskState?: (id: string) => Promise<{ sub_tasks?: Record<string, { agent_role: string; status: string }> } | null>;
+          readPendingGates?: () => Promise<Array<{ gate_id: string; task_id: string; type: string; sub_task?: string; status: string }>>;
+        };
+        if (!api.listTaskIds || !api.readTaskState) return;
+        const ids = await api.listTaskIds();
+        const gates = (await api.readPendingGates?.() ?? []).filter(g => g.status === 'pending');
+        const gateByTask = new Map(gates.map(g => [g.task_id, { type: g.type, subTask: g.sub_task, gateId: g.gate_id }]));
+        const rank = (s: string) => (s === 'in_progress' ? 3 : s === 'failed' ? 2 : s === 'pending' ? 1 : 0);
+        const snapshots: TaskSnapshot[] = [];
+        for (const id of ids) {
+          const st = await api.readTaskState!(id);
+          const agentStatus: Record<string, string> = {};
+          for (const sub of Object.values(st?.sub_tasks ?? {})) {
+            const cur = agentStatus[sub.agent_role];
+            if (!cur || rank(sub.status) > rank(cur)) agentStatus[sub.agent_role] = sub.status;
+          }
+          snapshots.push({ taskId: id, title: id, agentStatus, pendingGate: gateByTask.get(id) });
+        }
+        set({ laneCards: deriveCards(DEFAULT_FLOW, snapshots) });
+      },
+
+      createBrainstormTask: async (title, idea) => {
+        const { liveApi } = get();
+        if (!liveApi) { get().showToast('Connect a repo first'); return null; }
+        const api = liveApi as unknown as { writeRepoFile?: (p: string, c: string) => Promise<void> };
+        if (!api.writeRepoFile) { get().showToast('This connection cannot create tasks'); return null; }
+        const slug = title.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 20) || 'IDEA';
+        const stamp = Date.now().toString(36).slice(-5).toUpperCase();
+        const taskId = `${slug}-${stamp}`;
+        const md = `# ${title.trim()}\n\n${idea.trim()}\n`;
+        // A minimal state placing the task in the Brainstorm lane (ideation in progress).
+        const state = { task_id: taskId, phase: 'brainstorm', sub_tasks: { ideation: { agent_role: 'ideation', status: 'in_progress' } } };
+        try {
+          await api.writeRepoFile(`arbiter/tasks/${taskId}/task.md`, md);
+          await api.writeRepoFile(`arbiter/tasks/${taskId}/state.json`, JSON.stringify(state, null, 2));
+          await get().loadLanes();
+          get().showToast(`Started brainstorm: ${taskId}`);
+          return taskId;
+        } catch (e) {
+          get().showToast(`Could not create task: ${(e as Error).message}`, 5000);
+          return null;
+        }
+      },
       cliStats: null,
       agentData: {},
       messages: [],
@@ -231,12 +304,13 @@ export const useAppStore = create<AppStore>()(
       poll: async () => {
         const { liveApi } = get();
         if (!liveApi) return;
-        const [state, stats, agents, msgs, board] = await Promise.all([
+        const [state, stats, agents, msgs, board, engineGates] = await Promise.all([
           liveApi.readState(),
           liveApi.readCliStats(),
           liveApi.readAgents(),
           liveApi.readMessages(),
           liveApi.readBoard(),
+          liveApi.readPendingGates(),
         ]);
 
         // Collect tickets to probe: board-based active ones + any plan marked "ready"
@@ -327,6 +401,7 @@ export const useAppStore = create<AppStore>()(
 
         set({
           arbiterState: { ...baseState, jobs: mergedJobs, pending_gates: pendingGates },
+          pendingEngineGates: (engineGates ?? []).filter((g) => g.status === 'pending'),
           cliStats: stats,
           agentData: agents,
           messages,
@@ -337,7 +412,8 @@ export const useAppStore = create<AppStore>()(
       startPolling: () => {
         get().stopPolling();
         get().poll();
-        const id = setInterval(() => get().poll(), 5000);
+        void get().loadLanes();
+        const id = setInterval(() => { get().poll(); void get().loadLanes(); }, 5000);
         set({ _pollInterval: id });
       },
 

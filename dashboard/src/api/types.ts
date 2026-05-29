@@ -360,3 +360,21 @@ export type CriticalPathFlag = {
   isCriticalPath: boolean;
   blockingCount: number;
 };
+
+/**
+ * A human gate as written by the ENGINE to arbiter/pending-gates.json (the file the
+ * Conductor's GatePoller actually polls). Distinct from the legacy `pending_gates`
+ * (ConductorGate) model. Resolving one (status pending→approved/rejected) unblocks
+ * the running Conductor.
+ */
+export interface EngineGate {
+  gate_id: string;
+  type: string;
+  task_id: string;
+  sub_task?: string;
+  created_at: string;
+  context: string;
+  status: 'pending' | 'approved' | 'rejected';
+  resolved_at?: string;
+  comment?: string;
+}

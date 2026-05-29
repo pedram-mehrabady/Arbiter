@@ -9,6 +9,7 @@ import { PipelineView } from './features/pipeline/PipelineView';
 import { ReportsView } from './features/reports/ReportsView';
 import { FlowView } from './features/flow/FlowView';
 import { BoardView } from './features/board/BoardView';
+import { LanesView } from './features/lanes/LanesView';
 import { PlanModal } from './features/arbiter/components/PlanModal';
 import { PlanReviewModal } from './features/arbiter/components/PlanReviewModal';
 import { ActionGateModal } from './features/arbiter/components/ActionGateModal';
@@ -20,14 +21,14 @@ import { useDeveloperActivity } from './hooks/useDeveloperActivity';
 import { getDeveloperName } from './lib/developer';
 import styles from './App.module.css';
 
-type MainTab = 'pipeline' | 'reports' | 'flow' | 'board';
+type MainTab = 'lanes' | 'pipeline' | 'reports' | 'flow' | 'board';
 
 export default function App() {
-  const [tab, setTab] = useState<MainTab>('pipeline');
+  const [tab, setTab] = useState<MainTab>('lanes');
   const [needsSetup, setNeedsSetup] = useState(() => getDeveloperName() === null);
   const [profileOpen, setProfileOpen] = useState(false);
 
-  const { openModal, arbiterState, activeConductorGate, conductorSessions, openConductorGate, isConnected, connectDev, restoreConnection, reconnectSaved, pendingReconnectName, settings } = useAppStore(useShallow((s) => ({
+  const { openModal, arbiterState, activeConductorGate, conductorSessions, openConductorGate, isConnected, connectDev, restoreConnection, reconnectSaved, pendingReconnectName, pendingEngineGates, resolveEngineGate, settings } = useAppStore(useShallow((s) => ({
     openModal:           s.openModal,
     arbiterState:        s.arbiterState,
     activeConductorGate: s.activeConductorGate,
@@ -38,6 +39,8 @@ export default function App() {
     restoreConnection:   s.restoreConnection,
     reconnectSaved:      s.reconnectSaved,
     pendingReconnectName: s.pendingReconnectName,
+    pendingEngineGates:  s.pendingEngineGates,
+    resolveEngineGate:   s.resolveEngineGate,
     settings:            s.settings,
   })));
 
@@ -72,7 +75,30 @@ export default function App() {
         </div>
       )}
 
+      {pendingEngineGates.length > 0 && (
+        <div className={styles.gateBanner}>
+          {pendingEngineGates.map((g) => (
+            <div key={g.gate_id} className={styles.gateRow}>
+              <span className={styles.gateInfo}>
+                ⏸ <strong>{g.type}</strong> · {g.task_id}
+                <span className={styles.gateContext}>{g.context}</span>
+              </span>
+              <span className={styles.gateActions}>
+                <button type="button" className={styles.gateApprove} onClick={() => { void resolveEngineGate(g.gate_id, 'approved'); }}>Approve</button>
+                <button type="button" className={styles.gateReject} onClick={() => { void resolveEngineGate(g.gate_id, 'rejected'); }}>Reject</button>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
       <nav className={styles.tabNav}>
+        <button
+          className={`${styles.tabBtn}${tab === 'lanes' ? ' ' + styles.tabBtnActive : ''}`}
+          onClick={() => setTab('lanes')}
+        >
+          Lanes
+        </button>
         <button
           className={`${styles.tabBtn}${tab === 'pipeline' ? ' ' + styles.tabBtnActive : ''}`}
           onClick={() => setTab('pipeline')}
@@ -116,6 +142,7 @@ export default function App() {
       )}
 
       <div className={styles.content}>
+        {tab === 'lanes'    && <LanesView />}
         {tab === 'pipeline' && <PipelineView />}
         {tab === 'reports'  && <ReportsView />}
         {tab === 'flow'     && <FlowView />}
