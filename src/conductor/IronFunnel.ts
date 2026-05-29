@@ -188,6 +188,10 @@ export class IronFunnel {
 
       if (gate3Failures >= MAX_GATE3_FAILURES) {
         this.sqliteStore.upsertTask({ task_id: taskId, status: 'failed' });
+        // Wake the orchestrator so it can record a failure summary + lessons.
+        await this.orchestratorDispatcher
+          .wake(taskId, 'gate_failed_twice', { gate: 3, failures: gate3Failures, lastOutput: g3.testOutput.slice(0, 2_000) })
+          .catch(() => { /* lessons capture is best-effort */ });
         return {
           passed: false,
           gates,

@@ -15,6 +15,7 @@ function makeStore(): SqliteStore {
   return {
     upsertTask: vi.fn((row: { task_id: string; status?: string }) => { tasks[row.task_id] = row; }),
     appendEvent: vi.fn(),
+    getEvents: vi.fn().mockReturnValue([]),
     getOrchestratorState: vi.fn().mockReturnValue(undefined),
     setOrchestratorState: vi.fn(),
   } as unknown as SqliteStore;
@@ -84,6 +85,37 @@ describe('CiResultHandler', () => {
 
     expect(store.upsertTask).toHaveBeenCalledWith(
       expect.objectContaining({ task_id: 'TASK-004', status: 'failed' }),
+    );
+  });
+
+  it('on failure: records one debugger attempt (guarded against repeats)', async () => {
+    const dir = tempDir();
+    const store = makeStore();
+    const handler = new CiResultHandler(store, makeProvider(), dir);
+
+    await handler.handle('TASK-007', 'failure', '', 'https://github.com/run/3');
+
+    expect(store.appendEvent).toHaveBeenCalledWith(
+      'TASK-007',
+      'ci_debugger_attempt',
+      expect.any(Object),
+    );
+  });
+
+  it('on failure: skips the debugger when one was already attempted', async () => {
+    const dir = tempDir();
+    const store = makeStore();
+    // Simulate a prior attempt already recorded.
+    (store.getEvents as ReturnType<typeof vi.fn>).mockReturnValue([{ id: 1, event_type: 'ci_debugger_attempt', payload: '{}', created_at: '' }]);
+    const handler = new CiResultHandler(store, makeProvider(), dir);
+
+    await handler.handle('TASK-008', 'failure', '', '');
+
+    const attemptCalls = (store.appendEvent as ReturnType<typeof vi.fn>).mock.calls
+      .filter((c: unknown[]) => c[1] === 'ci_debugger_attempt');
+    expect(attemptCalls).toHaveLength(0);
+    expect(store.upsertTask).toHaveBeenCalledWith(
+      expect.objectContaining({ task_id: 'TASK-008', status: 'failed' }),
     );
   });
 

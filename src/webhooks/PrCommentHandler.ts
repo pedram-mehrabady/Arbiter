@@ -3,11 +3,14 @@ import { promisify } from 'node:util';
 import { SqliteStore } from '../state/SqliteStore';
 import { LLMProvider } from '../providers/LLMProvider';
 import { OrchestratorDispatcher } from '../orchestrator/OrchestratorDispatcher';
+import { PatchRunner } from './PatchRunner';
 
 const execFileAsync = promisify(execFile);
 
 export class PrCommentHandler {
   private readonly orchestrator: OrchestratorDispatcher;
+  private readonly patcher: PatchRunner;
+  private readonly coderModel: string;
 
   constructor(
     private readonly sqliteStore: SqliteStore,
@@ -21,6 +24,8 @@ export class PrCommentHandler {
       this.workspaceRoot,
       orchestratorModel,
     );
+    this.patcher = new PatchRunner(this.sqliteStore, this.provider, this.workspaceRoot);
+    this.coderModel = orchestratorModel;
   }
 
   async handle(
@@ -57,7 +62,7 @@ export class PrCommentHandler {
     } else if (commentType === 'question') {
       await this.postPrComment(prNumber, response.content);
     } else if (commentType === 'code_change') {
-      await this.dispatchCoderFix(taskId, comment, response.content);
+      await this.dispatchCoderFix(taskId, comment, response.content, prNumber);
     }
   }
 
@@ -77,6 +82,7 @@ export class PrCommentHandler {
     taskId: string,
     comment: string,
     orchestratorSuggestion: string,
+    prNumber: number,
   ): Promise<void> {
     this.sqliteStore.appendEvent(taskId, 'coder_fix_dispatched', {
       reason: 'pr_comment_code_change',
@@ -84,12 +90,39 @@ export class PrCommentHandler {
       suggestion: orchestratorSuggestion.slice(0, 500),
     });
 
-    // Coder dispatch is handled by Conductor.resumeFromPrComment() in Phase 07+
-    // Here we record the intent in SqliteStore and let the Conductor poll for it
-    this.sqliteStore.appendEvent(taskId, 'pending_coder_fix', {
+    const branchName = `arbiter/${taskId}`;
+    const prompt = [
+      'You are applying a reviewer-requested change to an open PR.',
+      'Make the change directly in the working tree. Output only the edited files.',
+      '',
+      '## Reviewer comment',
       comment,
+      '',
+      '## Orchestrator guidance',
       orchestratorSuggestion,
-      createdAt: new Date().toISOString(),
+    ].join('\n');
+
+    const result = await this.patcher.applyFix({
+      taskId,
+      branchName,
+      agentRole: 'backend',
+      model: this.coderModel,
+      prompt,
+      commitMessage: `arbiter: address PR #${prNumber} review comment`,
     });
+
+    this.sqliteStore.appendEvent(taskId, 'coder_fix_result', {
+      pushed: result.pushed,
+      gatePassed: result.gatePassed,
+      reason: result.reason,
+    });
+
+    // Tell the reviewer what happened, on the PR.
+    const reply = result.pushed
+      ? '🤖 Pushed a fix for this comment — CI will re-run on the new commit.'
+      : result.gatePassed === false
+        ? `🤖 Attempted a fix but it failed the compiler gate (${result.reason}). Leaving the PR unchanged.`
+        : `🤖 Could not apply an automated fix (${result.reason ?? 'unknown'}).`;
+    await this.postPrComment(prNumber, reply);
   }
 }
