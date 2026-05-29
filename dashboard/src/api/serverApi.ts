@@ -159,6 +159,10 @@ export class ServerApi {
     return serverRead(relativePath, this.rootPath);
   }
 
+  async writeRepoFile(relativePath: string, content: string): Promise<void> {
+    await serverWrite(relativePath, content, this.rootPath);
+  }
+
   async listExecPlanFolder(stageDir: string, taskId: string, execPlanDir = 'compliance/exec-plan'): Promise<Array<{ name: string; mtime_ms: number }>> {
     const entries = await serverLs(`${execPlanDir}/${stageDir}/${taskId}`, this.rootPath);
     return entries

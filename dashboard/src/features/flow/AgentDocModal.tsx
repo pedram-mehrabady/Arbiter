@@ -24,15 +24,26 @@ export interface AgentDocModalProps {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+// Canonical on-disk layout produced by `arbiter sync` (CLI source of truth):
+//   full pipeline  → arbiter/agents/templates/<key>.md          + arbiter/agents/manifests/<key>.manifest.yaml
+//   speed pipeline → arbiter/agents/templates-speed/<key>.md    + arbiter/agents/manifests-speed/<key>.manifest.yaml
+function rulebookPath(template: 'full' | 'compact', agentKey: string) {
+  return template === 'compact'
+    ? `arbiter/agents/templates-speed/${agentKey}.md`
+    : `arbiter/agents/templates/${agentKey}.md`;
+}
+function manifestPath(template: 'full' | 'compact', agentKey: string) {
+  return template === 'compact'
+    ? `arbiter/agents/manifests-speed/${agentKey}.manifest.yaml`
+    : `arbiter/agents/manifests/${agentKey}.manifest.yaml`;
+}
 function agentDocPath(template: 'full' | 'compact', agentKey: string, file: 'rulebook.md' | 'manifest.md') {
-  const slug = template === 'compact' ? 'speed' : 'full';
-  return `arbiter/factory/${slug}/agents/${agentKey}/${file}`;
+  return file === 'rulebook.md' ? rulebookPath(template, agentKey) : manifestPath(template, agentKey);
 }
 
 function buildTermCmd(agentModel: string, template: 'full' | 'compact', agentKey: string, os: string, repoPath?: string) {
-  const slug = template === 'compact' ? 'speed' : 'full';
-  const rbPath = `arbiter/factory/${slug}/agents/${agentKey}/rulebook.md`;
-  const mfPath = `arbiter/factory/${slug}/agents/${agentKey}/manifest.md`;
+  const rbPath = rulebookPath(template, agentKey);
+  const mfPath = manifestPath(template, agentKey);
 
   if (os === 'win') {
     const rbWin = rbPath.replace(/\//g, '\\');
@@ -50,15 +61,6 @@ function looksLikeFileContent(text: string): boolean {
   return lines.length > 3 && (trimmed.startsWith('#') || trimmed.startsWith('- '));
 }
 
-async function fetchDiskTemplate(pipeline: string, key: string, file: 'rulebook.md' | 'manifest.md'): Promise<string | null> {
-  try {
-    const params = new URLSearchParams({ pipeline, key, file });
-    const r = await fetch(`/api/agent-template?${params}`);
-    const data = await r.json() as { ok: boolean; content?: string };
-    return data.ok ? (data.content ?? null) : null;
-  } catch { return null; }
-}
-
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function AgentDocModal({
@@ -71,6 +73,7 @@ export function AgentDocModal({
   onClose,
 }: AgentDocModalProps) {
   const settings = useAppStore((s) => s.settings);
+  const liveApi  = useAppStore((s) => s.liveApi);
   const repoPath  = settings.repoPath;
   const os        = settings.os;
 
@@ -107,19 +110,9 @@ export function AgentDocModal({
   useEffect(() => {
     async function load() {
       setLoading(true);
-      const root = repoPath || undefined;
+      if (!liveApi) { setLoading(false); return; } // not connected — nothing to read
 
-      async function readFile(path: string): Promise<string | null> {
-        try {
-          const params = new URLSearchParams({ path });
-          if (root) params.set('root', root);
-          const res = await fetch(`/api/repo-read?${params}`);
-          const data = await res.json() as { ok: boolean; content?: string };
-          return data.ok ? (data.content ?? '') : null;
-        } catch { return null; }
-      }
-
-      const [rb, mf] = await Promise.all([readFile(rbPath), readFile(mfPath)]);
+      const [rb, mf] = await Promise.all([liveApi.readRepoFile(rbPath), liveApi.readRepoFile(mfPath)]);
       setHasRulebook(rb !== null);
       setHasManifest(mf !== null);
       if (rb !== null) setRulebook(rb);
@@ -128,7 +121,7 @@ export function AgentDocModal({
     }
     load();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rbPath, mfPath]);
+  }, [rbPath, mfPath, liveApi]);
 
   // ── Escape to close ───────────────────────────────────────────────────────
 
@@ -148,36 +141,21 @@ export function AgentDocModal({
 
   const initialize = useCallback(async () => {
     setInitError('');
-    const pipelineSlug = template === 'compact' ? 'speed' : 'full';
+    if (!liveApi) { setInitError('Connect the repo first.'); return; }
 
-    // Option A: try disk templates first, fall back to hardcoded strings
-    const [diskRb, diskMf] = await Promise.all([
-      fetchDiskTemplate(pipelineSlug, agentKey, 'rulebook.md'),
-      fetchDiskTemplate(pipelineSlug, agentKey, 'manifest.md'),
-    ]);
+    // Seed missing files from the bundled defaults; the repo is the source of truth.
     const fallback = template === 'compact' ? SPEED_TEMPLATES : FULL_TEMPLATES;
     const tpl = fallback[agentKey];
-    const rbContent = diskRb ?? tpl?.rulebook;
-    const mfContent = diskMf ?? tpl?.manifest;
+    const rbContent = tpl?.rulebook;
+    const mfContent = tpl?.manifest;
 
     if (!rbContent || !mfContent) {
       setInitError(`No template found for agent "${agentKey}"`);
       return;
     }
 
-    const root = repoPath || undefined;
-    async function writeFile(filePath: string, content: string) {
-      const res = await fetch('/api/repo-write', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: filePath, content, ...(root ? { root } : {}) }),
-      });
-      const data = await res.json() as { ok: boolean; error?: string };
-      if (!data.ok) throw new Error(data.error ?? `Write failed for ${filePath}`);
-    }
-
     try {
-      await Promise.all([writeFile(rbPath, rbContent), writeFile(mfPath, mfContent)]);
+      await Promise.all([liveApi.writeRepoFile(rbPath, rbContent), liveApi.writeRepoFile(mfPath, mfContent)]);
       setRulebook(rbContent);
       setManifest(mfContent);
       setHasRulebook(true);
@@ -186,71 +164,59 @@ export function AgentDocModal({
     } catch (e) {
       setInitError(`Initialize failed: ${(e as Error).message}`);
     }
-  }, [template, agentKey, repoPath, rbPath, mfPath]);
+  }, [template, agentKey, liveApi, rbPath, mfPath]);
 
   // ── Load + save default templates (Option B) ──────────────────────────────
 
   const loadTemplate = useCallback(async () => {
     setTplError('');
-    const pipelineSlug = template === 'compact' ? 'speed' : 'full';
-    const [diskRb, diskMf] = await Promise.all([
-      fetchDiskTemplate(pipelineSlug, agentKey, 'rulebook.md'),
-      fetchDiskTemplate(pipelineSlug, agentKey, 'manifest.md'),
-    ]);
+    const [repoRb, repoMf] = liveApi
+      ? await Promise.all([liveApi.readRepoFile(rbPath), liveApi.readRepoFile(mfPath)])
+      : [null, null];
     const fallback = template === 'compact' ? SPEED_TEMPLATES : FULL_TEMPLATES;
     const tpl = fallback[agentKey];
-    setTplRulebook(diskRb ?? tpl?.rulebook ?? '');
-    setTplManifest(diskMf ?? tpl?.manifest ?? '');
+    setTplRulebook(repoRb ?? tpl?.rulebook ?? '');
+    setTplManifest(repoMf ?? tpl?.manifest ?? '');
     setTplDirty(false);
     setActiveTab('rulebook');
     setEditingTemplate(true);
-  }, [template, agentKey]);
+  }, [template, agentKey, liveApi, rbPath, mfPath]);
 
   const saveTemplate = useCallback(async () => {
     if (!tplDirty || tplSaving) return;
     setTplSaving(true);
     setTplError('');
-    const pipelineSlug = template === 'compact' ? 'speed' : 'full';
     const isRulebook = activeTab === 'rulebook';
-    const file = isRulebook ? 'rulebook.md' : 'manifest.md';
+    const path = isRulebook ? rbPath : mfPath;
     const content = isRulebook ? tplRulebook : tplManifest;
     try {
-      const res = await fetch('/api/save-agent-template', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pipeline: pipelineSlug, key: agentKey, file, content }),
-      });
-      const data = await res.json() as { ok: boolean; error?: string };
-      if (!data.ok) throw new Error(data.error ?? 'Save failed');
+      if (!liveApi) throw new Error('Connect the repo first.');
+      await liveApi.writeRepoFile(path, content);
       setTplDirty(false);
     } catch (e) {
       setTplError(`Save failed: ${(e as Error).message}`);
     } finally {
       setTplSaving(false);
     }
-  }, [tplDirty, tplSaving, template, agentKey, activeTab, tplRulebook, tplManifest]);
+  }, [tplDirty, tplSaving, liveApi, activeTab, rbPath, mfPath, tplRulebook, tplManifest]);
 
   // ── Save current file ─────────────────────────────────────────────────────
 
   const save = useCallback(async () => {
     if (!dirty || saving) return;
     setSaving(true);
-    const root = repoPath || undefined;
     const isRulebook = activeTab === 'rulebook';
     const path = isRulebook ? rbPath : mfPath;
     const content = isRulebook ? rulebook : manifest;
     try {
-      await fetch('/api/repo-write', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path, content, ...(root ? { root } : {}) }),
-      });
+      if (!liveApi) { setInitError('Connect the repo first.'); return; }
+      await liveApi.writeRepoFile(path, content);
       setDirty(false);
       if (isRulebook) setHasRulebook(true); else setHasManifest(true);
     } finally {
       setSaving(false);
     }
-  }, [dirty, saving, activeTab, rbPath, mfPath, rulebook, manifest, repoPath]);
+  }, [dirty, saving, activeTab, rbPath, mfPath, rulebook, manifest, liveApi]);
 
   // ── Run agent in terminal ─────────────────────────────────────────────────
 

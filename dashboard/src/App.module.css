@@ -32,3 +32,17 @@
   width: 100%;
   margin: 0 auto;
 }
+
+.reconnectBanner {
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  padding: 8px 16px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-bottom: 1px solid var(--accent);
+  color: var(--text); font-size: 13px;
+}
+.reconnectBanner button {
+  padding: 5px 14px;
+  background: var(--accent); color: #fff; border: none; border-radius: 6px;
+  font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit;
+}
+.reconnectBanner button:hover { filter: brightness(1.08); }

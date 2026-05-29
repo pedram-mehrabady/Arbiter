@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import type { ArbiterState, AppSettings, CliStats, AgentData, TabKey, WidgetId, ArbiterConfig, AgentsConfig } from '../api/types';
 import { DEFAULT_SETTINGS, DEFAULT_WIDGET_ORDER, DEFAULT_WIDGET_SIZES, DEFAULT_ARBITER_CONFIG } from '../api/types';
 import { LiveApi, connectRepo } from '../api/live';
+import { saveRepoHandles, loadRepoHandles, queryHandlePermission, requestHandlePermission } from '../lib/handleStore';
 import { ServerApi } from '../api/serverApi';
 import { createLLMAdapter } from '../api/llm';
 import type { PlanAnalysis, PlanItem, PlanStatus, CliMessage, ConductorSession, GateName } from '../api/types';
@@ -23,6 +24,12 @@ interface AppStore {
   connect: () => Promise<void>;
   connectWithHandle: (arbiterHandle: FileSystemDirectoryHandle, rootHandle?: FileSystemDirectoryHandle) => Promise<void>;
   connectDev: (repoRoot: string) => Promise<void>;
+  /** Silently reconnect from a previously persisted handle if permission is still granted. */
+  restoreConnection: () => Promise<void>;
+  /** One-click reconnect to the saved handle (prompts for permission — needs a user gesture). */
+  reconnectSaved: () => Promise<boolean>;
+  /** Name of a saved repo awaiting a permission re-grant after reload (null when none/connected). */
+  pendingReconnectName: string | null;
 
   // ── Arbiter state ─────────────────────────────────────────
   arbiterState: ArbiterState;
@@ -135,6 +142,7 @@ export const useAppStore = create<AppStore>()(
       fsHandle: null,
       liveApi: null,
       isConnected: false,
+      pendingReconnectName: null,
 
       connect: async () => {
         const result = await connectRepo();
@@ -143,7 +151,8 @@ export const useAppStore = create<AppStore>()(
           return;
         }
         const api = new LiveApi(result.arbiterHandle, result.rootHandle);
-        set({ fsHandle: result.arbiterHandle, liveApi: api, isConnected: true });
+        set({ fsHandle: result.arbiterHandle, liveApi: api, isConnected: true, pendingReconnectName: null });
+        void saveRepoHandles(result.arbiterHandle, result.rootHandle);
         get().showToast('Connected to repo — going live', 2500);
         void get().loadArbiterConfig();
         void get().loadAgentsConfig();
@@ -152,11 +161,41 @@ export const useAppStore = create<AppStore>()(
 
       connectWithHandle: async (arbiterHandle, rootHandle) => {
         const api = new LiveApi(arbiterHandle, rootHandle);
-        set({ fsHandle: arbiterHandle, liveApi: api, isConnected: true });
+        set({ fsHandle: arbiterHandle, liveApi: api, isConnected: true, pendingReconnectName: null });
+        void saveRepoHandles(arbiterHandle, rootHandle);
         get().showToast('Connected to repo — going live', 2500);
         void get().loadArbiterConfig();
         void get().loadAgentsConfig();
         get().startPolling();
+      },
+
+      restoreConnection: async () => {
+        if (get().isConnected) return;
+        const saved = await loadRepoHandles();
+        if (!saved) return;
+        // Only auto-connect when permission is still granted (no prompt → no gesture needed).
+        const perm = await queryHandlePermission(saved.root ?? saved.arbiter);
+        if (perm === 'granted') {
+          await get().connectWithHandle(saved.arbiter, saved.root);
+        } else {
+          // Surface a one-click reconnect; requestPermission needs a user gesture.
+          set({ pendingReconnectName: (saved.root ?? saved.arbiter).name });
+        }
+      },
+
+      reconnectSaved: async () => {
+        const saved = await loadRepoHandles();
+        if (!saved) { get().showToast('No saved repo to reconnect', 4000); return false; }
+        const target = saved.root ?? saved.arbiter;
+        const perm = await requestHandlePermission(target);
+        if (perm !== 'granted') {
+          get().showToast('Permission denied — pick the folder again', 5000);
+          return false;
+        }
+        // Ensure the arbiter handle is also usable when root and arbiter differ.
+        if (saved.root && saved.root !== saved.arbiter) await requestHandlePermission(saved.arbiter);
+        await get().connectWithHandle(saved.arbiter, saved.root);
+        return true;
       },
 
       connectDev: async (repoRoot: string) => {
