@@ -27,7 +27,7 @@ export default function App() {
   const [needsSetup, setNeedsSetup] = useState(() => getDeveloperName() === null);
   const [profileOpen, setProfileOpen] = useState(false);
 
-  const { openModal, arbiterState, activeConductorGate, conductorSessions, openConductorGate, isConnected, connectDev, settings } = useAppStore(useShallow((s) => ({
+  const { openModal, arbiterState, activeConductorGate, conductorSessions, openConductorGate, isConnected, connectDev, restoreConnection, reconnectSaved, pendingReconnectName, settings } = useAppStore(useShallow((s) => ({
     openModal:           s.openModal,
     arbiterState:        s.arbiterState,
     activeConductorGate: s.activeConductorGate,
@@ -35,15 +35,23 @@ export default function App() {
     openConductorGate:   s.openConductorGate,
     isConnected:         s.isConnected,
     connectDev:          s.connectDev,
+    restoreConnection:   s.restoreConnection,
+    reconnectSaved:      s.reconnectSaved,
+    pendingReconnectName: s.pendingReconnectName,
     settings:            s.settings,
   })));
 
-  // Auto-reconnect on startup when a repo path was previously saved
+  // Auto-reconnect on startup:
+  //  1. Try the persisted browser directory handle (IndexedDB) — silent if permission still granted.
+  //  2. Otherwise fall back to server/dev mode when an absolute repo path was saved.
   useEffect(() => {
-    const p = settings.repoPath?.trim();
-    if (!isConnected && p && (p.startsWith('/') || /^[A-Za-z]:[/\\]/.test(p))) {
-      connectDev(p);
-    }
+    if (isConnected) return;
+    void (async () => {
+      await restoreConnection();
+      if (useAppStore.getState().isConnected) return;
+      const p = settings.repoPath?.trim();
+      if (p && (p.startsWith('/') || /^[A-Za-z]:[/\\]/.test(p))) connectDev(p);
+    })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -56,6 +64,13 @@ export default function App() {
   return (
     <div className={styles.shell}>
       <TopBar onOpenProfile={() => setProfileOpen(true)} />
+
+      {!isConnected && pendingReconnectName && (
+        <div className={styles.reconnectBanner}>
+          <span>Reconnect <strong>{pendingReconnectName}</strong> to restore your repo.</span>
+          <button type="button" onClick={() => { void reconnectSaved(); }}>Reconnect</button>
+        </div>
+      )}
 
       <nav className={styles.tabNav}>
         <button
