@@ -236,6 +236,20 @@ export class LiveApi {
     } catch { return null; }
   }
 
+  /** Write a file relative to the repo root, creating intermediate directories. */
+  async writeRepoFile(relativePath: string, content: string): Promise<void> {
+    const root = this.rootDir ?? this.dir;
+    const parts = relativePath.split('/').filter(Boolean);
+    let dir: FileSystemDirectoryHandle = root;
+    for (let i = 0; i < parts.length - 1; i++) {
+      dir = await dir.getDirectoryHandle(parts[i], { create: true });
+    }
+    const fh = await dir.getFileHandle(parts[parts.length - 1], { create: true });
+    const w = await fh.createWritable();
+    await w.write(content);
+    await w.close();
+  }
+
   // ── Misc ──────────────────────────────────────────────────────────────────
 
   async writeImprovementItem(item: ImprovementItem): Promise<void> {
