@@ -43,6 +43,8 @@ interface AppStore {
   loadLanes: () => Promise<void>;
   /** Create a new task in the Brainstorm lane (writes task.md + an ideation state, + optional attachment). */
   createBrainstormTask: (title: string, idea: string, attachment?: { name: string; content: string }) => Promise<string | null>;
+  /** Promote a brainstorm idea into the pipeline (writes promote.flag for the factory daemon). */
+  promoteTask: (taskId: string) => Promise<void>;
   cliStats: CliStats | null;
   agentData: Record<string, AgentData>;
   messages: CliMessage[];
@@ -292,6 +294,18 @@ export const useAppStore = create<AppStore>()(
         } catch (e) {
           get().showToast(`Could not create task: ${(e as Error).message}`, 5000);
           return null;
+        }
+      },
+      promoteTask: async (taskId) => {
+        const { liveApi } = get();
+        const api = liveApi as unknown as { writeRepoFile?: (p: string, c: string) => Promise<void> } | null;
+        if (!api?.writeRepoFile) { get().showToast('This connection cannot promote tasks'); return; }
+        try {
+          await api.writeRepoFile(`arbiter/tasks/${taskId}/promote.flag`, new Date().toISOString());
+          get().showToast('Promoted — the factory daemon will run it');
+          await get().loadLanes();
+        } catch (e) {
+          get().showToast(`Could not promote: ${(e as Error).message}`, 5000);
         }
       },
       cliStats: null,

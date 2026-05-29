@@ -13,11 +13,12 @@ const LIFECYCLE_LABEL: Record<CardLifecycle, string> = {
 };
 
 export function LanesView() {
-  const { laneCards, isConnected, createBrainstormTask, resolveEngineGate, showToast } = useAppStore(useShallow((s) => ({
+  const { laneCards, isConnected, createBrainstormTask, resolveEngineGate, promoteTask, showToast } = useAppStore(useShallow((s) => ({
     laneCards: s.laneCards,
     isConnected: s.isConnected,
     createBrainstormTask: s.createBrainstormTask,
     resolveEngineGate: s.resolveEngineGate,
+    promoteTask: s.promoteTask,
     showToast: s.showToast,
   })));
 
@@ -40,7 +41,7 @@ export function LanesView() {
     if (card.gateId) {
       void resolveEngineGate(card.gateId, 'approved'); // approving the gate advances the running pipeline
     } else if (card.laneId === 'brainstorm') {
-      showToast('Idea ready — run it with: arbiter conduct <id> --provider mock (the board can’t spawn the engine)', 7000);
+      void promoteTask(card.taskId); // hand the cooked idea to the factory daemon
     } else {
       showToast('This task advances automatically — no gate to approve here', 5000);
     }

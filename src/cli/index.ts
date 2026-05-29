@@ -859,6 +859,28 @@ syncCmd
   });
 
 // ── arbiter dashboard ─────────────────────────────────────────────────────────
+// ── arbiter factory ─────────────────────────────────────────────────────────
+program.command('factory')
+  .description('Run the factory daemon — pick up ready tasks, run them through the pipeline, keep the board live')
+  .option('--workspace <path>', 'Workspace root (default: cwd)', process.cwd())
+  .option('--provider <type>', 'Provider for all agents (use "mock" for a free local run)')
+  .option('--max-tasks <n>', 'Max concurrent in-flight tasks', '2')
+  .option('--interval <ms>', 'Watch interval in ms', '3000')
+  .option('--once', 'Run a single tick and exit (no watch loop)', false)
+  .action(async (opts: { workspace: string; provider?: string; maxTasks: string; interval: string; once?: boolean }) => {
+    const { FactoryDaemon } = await import('../factory/FactoryDaemon');
+    let provider: unknown;
+    if (opts.provider === 'mock') { const { MockProvider } = await import('../providers/MockProvider'); provider = new MockProvider(); console.log('Factory using MockProvider — no agents billed.\n'); }
+    const daemon = new FactoryDaemon({
+      workspaceRoot: path.resolve(opts.workspace),
+      provider,
+      maxTasks: parseInt(opts.maxTasks, 10) || 2,
+      intervalMs: parseInt(opts.interval, 10) || 3000,
+    });
+    process.on('SIGINT', () => { daemon.stop(); console.log('\nFactory stopped.'); process.exit(0); });
+    if (opts.once) await daemon.tick(); else await daemon.watch();
+  });
+
 // ── arbiter board ──────────────────────────────────────────────────────────
 program.command('board')
   .description('Project current task states into arbiter/board.json (authoritative board for the dashboard)')
