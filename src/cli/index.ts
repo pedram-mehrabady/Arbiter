@@ -3,6 +3,7 @@ import { Command } from 'commander';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import { Conductor } from '../conductor/Conductor';
+import { MockProvider } from '../providers/MockProvider';
 import { GatePoller } from '../gates/GatePoller';
 import { DecisionLog } from '../decisions/DecisionLog';
 import { BuildReceiptStore } from '../receipts/BuildReceipt';
@@ -148,16 +149,22 @@ program
   .option('--resume', 'Resume from last checkpoint', false)
   .option('--shadow', 'Shadow mode — log decisions without executing', false)
   .option('--dry-run', 'Show what would run without invoking agents', false)
+  .option('--provider <type>', 'Override provider for ALL agents (e.g. "mock" for a free local dry run)')
   .option('--workspace <path>', 'Workspace root (default: cwd)', process.cwd())
   .option('--max-parallel <n>', 'Max concurrent sub-task agents', '1')
   .action(async (taskId: string, opts: Record<string, string | boolean>) => {
     const workspaceRoot = path.resolve(opts['workspace'] as string);
+    // `--provider mock` runs the entire pipeline with the deterministic MockProvider:
+    // no API calls, no cost — a true end-to-end dry run of the orchestration.
+    const providerOverride = opts['provider'] === 'mock' ? new MockProvider() : undefined;
+    if (providerOverride) console.log('Using MockProvider — no agents will be billed.\n');
     const conductor = new Conductor({
       resume: Boolean(opts['resume']),
       shadow: Boolean(opts['shadow']),
       dryRun: Boolean(opts['dryRun']),
       workspaceRoot,
       maxParallel: parseInt(String(opts['maxParallel']), 10),
+      ...(providerOverride ? { provider: providerOverride } : {}),
     });
     const result = await conductor.conduct(taskId);
     if (!result.ok) {
